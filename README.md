@@ -1,18 +1,20 @@
-# IEEE Research Paper Generator
+# DocOct — AI Research Paper Generator
 
-AI-powered system that converts review literature into IEEE-compliant, publication-ready research papers using RAG and LaTeX automation.
+Generate IEEE-compliant research papers from review literature using AI. Produces HTML and PDF output matching the IEEE DOCX template.
 
-## Project Structure
+## Features
 
-```
-├── frontend/          # React + Vite frontend
-├── backend/           # FastAPI backend
-└── docs/             # Documentation
-```
+- AI-powered paper generation from literature review prompts
+- IEEE-compliant HTML output (two-column, Times New Roman, proper sectioning)
+- PDF export via fpdf2 (no heavy LaTeX/TeXLive dependency)
+- LaTeX export (IEEEtran format) for Overleaf
+- Dark/light theme
+- Profile setup (name, course, degree, year)
 
 ## Setup
 
 ### Frontend
+
 ```bash
 cd frontend
 npm install
@@ -20,17 +22,17 @@ npm run dev
 ```
 
 ### Backend
+
 ```bash
 cd backend
 pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your credentials
 python main.py
 ```
 
+Set `GROQ_API_KEY` in your environment or `config.py`.
+
 ## Tech Stack
 
-- Frontend: React, Vite, Tailwind CSS
-- Backend: FastAPI, LangChain, Gemini 3
-- Database: Supabase (Postgres + pgvector)
-- Formatting: LaTeX (IEEEtran)
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** FastAPI, Groq AI (llama-3.3-70b-versatile)
+- **Export:** fpdf2 (PDF), IEEEtran (LaTeX), custom HTML
