@@ -34,5 +34,5 @@ Set `GROQ_API_KEY` in your environment or `config.py`.
 ## Tech Stack
 
 - **Frontend:** React, Vite, Tailwind CSS
-- **Backend:** FastAPI, Groq AI (llama-3.3-70b-versatile)
+- **Backend:** FastAPI, OpenCode Zen API (Nemotron-3-Ultra-Free)
 - **Export:** fpdf2 (PDF), IEEEtran (LaTeX), custom HTML
