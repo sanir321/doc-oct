@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Research Paper Generator - AI Research Assistant</title>
+    <meta name="description" content="Generate IEEE-compliant research papers using advanced AI technology. Upload references and let our AI create comprehensive, well-structured academic papers.">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Theme color -->
+    <meta name="theme-color" content="#cc785c">
+    <meta name="msapplication-TileColor" content="#cc785c">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Research Paper Generator - AI Research Assistant">
+    <meta property="og:description" content="Generate IEEE-compliant research papers using advanced AI technology.">
+    <meta property="og:type" content="website">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Research Paper Generator">
+    <meta name="twitter:description" content="AI-powered IEEE research paper generation">
+    
+    <style>
+      #loading-screen { position:fixed;top:0;left:0;width:100%;height:100%;background:#faf9f5;display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s }
+      #loading-screen.hide { opacity:0;pointer-events:none }
+      .lds-ring { display:inline-block;width:40px;height:40px;position:relative }
+      .lds-ring div { box-sizing:border-box;display:block;width:32px;height:32px;margin:4px;border:3px solid #e6dfd8;border-radius:50%;animation:lds-ring 1.2s cubic-bezier(.5,0,.5,1) infinite;border-color:#cc785c transparent transparent transparent }
+      @keyframes lds-ring { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+    </style>
+  </head>
+  <body>
+    <div id="loading-screen"><div class="lds-ring"><div></div></div></div>
+    
+    <div id="root"></div>
+    
+    <script>
+      window.addEventListener('load', () => setTimeout(() => document.getElementById('loading-screen')?.classList.add('hide'), 500));
+    </script>
+    
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
