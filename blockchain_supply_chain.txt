@@ -1,0 +1,31 @@
+﻿BLOCKCHAIN FOR SUPPLY CHAIN MANAGEMENT
+=======================================
+
+Blockchain technology offers promising solutions for supply chain management
+by providing transparency, traceability, and immutability. 
+
+Key benefits:
+- End-to-end traceability of goods
+- Smart contracts for automated payments
+- Tamper-proof record keeping
+- Reduction of counterfeit goods
+
+Hyperledger Fabric vs Ethereum for supply chain:
+Hyperledger Fabric offers permissioned blockchain which is more suitable
+for enterprise supply chains because participants are known and vetted.
+Ethereum offers public blockchain with smart contracts but has scalability
+issues.
+
+Smart contracts can automate:
+- Payment releases upon delivery confirmation
+- Quality assurance checks
+- Regulatory compliance reporting
+
+Case studies mentioned briefly but no detailed data included.
+Some companies are using blockchain for food traceability, pharma, and
+luxury goods verification.
+
+Challenges: scalability, interoperability between different blockchain
+networks, integration with legacy systems, and regulatory uncertainty.
+
+This seems promising but I don't have real implementation data.

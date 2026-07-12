@@ -1,0 +1,29 @@
+﻿QUANTUM MACHINE LEARNING NOTES
+==============================
+
+Quantum neural networks (QNNs) are a emerging paradigm that combines quantum 
+computing with machine learning. Unlike classical neural networks that use 
+binary bits, QNNs leverage quantum bits (qubits) which can exist in 
+superposition states.
+
+Key Concepts:
+- Variational Quantum Circuits (VQC)
+- Quantum Feature Maps
+- Parameterized Quantum Circuits (PQC)
+- Measurement-based quantum computing
+
+The main advantage of QNNs is the potential for quantum advantage in 
+high-dimensional feature spaces. However, current NISQ devices have 
+significant limitations.
+
+Some math:
+- |ψ⟩ = α|0⟩ + β|1⟩ where |α|² + |β|² = 1
+- The cost function C(θ) = ⟨ψ(θ)|H|ψ(θ)⟩
+- Gradient: ∂C/∂θ using parameter shift rule
+
+Quantum convolutional neural networks (QCNNs) are interesting because
+they avoid the barren plateau problem to some extent.
+
+Applications: drug discovery, quantum chemistry, optimization problems.
+
+Limitations: noise, decoherence, limited qubit count, error rates.

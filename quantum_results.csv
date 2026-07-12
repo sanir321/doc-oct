@@ -1,0 +1,6 @@
+﻿experiment,qubits,layers,accuracy,training_time
+qcnn_mnist,4,3,0.82,45.2
+qcnn_mnist,6,4,0.87,78.1
+qsvm_iris,4,2,0.91,12.5
+qcnn_fashion,6,4,,85.3
+qsvm_cifar,8,5,,320.5

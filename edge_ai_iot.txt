@@ -1,0 +1,6 @@
+﻿Edge AI brings machine learning to IoT devices at the network edge.
+Key advantages: low latency, privacy preservation, bandwidth reduction.
+Techniques: model compression, quantization, pruning, knowledge distillation.
+Hardware: NVIDIA Jetson, Google Coral, ARM Cortex-M with NPU.
+Benchmarks: latency measurements, power consumption, accuracy trade-offs.
+Applications: predictive maintenance, smart cameras, industrial IoT.
