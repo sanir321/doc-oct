@@ -84,13 +84,30 @@ If unclear (rare): {{"clear": false, "follow_up": "A simple clarifying question 
 
 def generate_paper_stream(file_text: str, answers: dict, analysis: dict):
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items()]) if answers else ""
-    prompt = f"""Write a complete IEEE conference research paper. Begin with ## Abstract and include all major sections.
+    prompt = f"""Write a focused position paper comparing three transformer model variants — BERT, Longformer, and BigBird — on two tasks: (1) standard-length text classification, and (2) long-document understanding.
+
+Ground every claim in the document context below. Do NOT invent any numerical results, paper counts, statistics, metrics, or citations not present in the document.
+
+Structure the paper with these ##-prefixed sections in order:
+- ## Abstract
+- ## Introduction
+- ## Architectural Comparison
+- ## Task 1: Standard-Length Text Classification
+- ## Task 2: Long-Document Understanding
+- ## Discussion
+- ## Conclusion
+
+Rules:
+- Start with ## Abstract (one paragraph summarising the comparison and key architectural trade-offs).
+- Each ## section should be 2–4 paragraphs of focused analysis.
+- Compare design choices, attention mechanisms, and computational trade-offs — do NOT report fabricated numbers.
+- Never include reasoning, chain-of-thought, thinking blocks, or meta-commentary. Output only the paper content.
 
 Document context: {file_text[:12000]}
 
 Author details: {answers_text}"""
     messages = [
-        {"role": "system", "content": "You are an IEEE paper generator. Start with ## Abstract. Output ONLY ##-headed sections. No explanations."},
+        {"role": "system", "content": "You are a position paper writer specialising in comparative analysis of transformer architectures. You write focused discussions that compare design trade-offs using only provided source material. You never fabricate numerical results, paper counts, or statistics. Your output uses only ##-prefixed headings and contains no reasoning or chain-of-thought."},
         {"role": "user", "content": prompt}
     ]
     with httpx.Client(timeout=300) as client:
@@ -104,6 +121,7 @@ Author details: {answers_text}"""
                 "temperature": 0.5,
                 "max_tokens": 16384,
                 "stream": True,
+                "reasoning_effort": "none",
             },
         ) as resp:
             resp.raise_for_status()

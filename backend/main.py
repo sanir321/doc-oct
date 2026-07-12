@@ -253,7 +253,7 @@ def parse_paper_text(paper_text, analysis, session_id):
 
     if not abstract_section and other_sections:
         intro = other_sections[0]["content"]
-        abstract_section = intro[:400] + "..."
+        abstract_section = intro[:500]
 
     authors_data = []
     for i, author in enumerate(analysis.get("authors", ["Author A"])):
@@ -365,7 +365,7 @@ async def download(session_id: str, fmt: str):
             pdf.multi_cell(pw - lm - rm, 10, title, align="C", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(4)
             if abstract:
-                pdf.set_font("Times", "BI", 10)
+                pdf.set_font("Times", "BI", 9)
                 pdf.multi_cell(pw - lm - rm, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(2)
             if keywords:
