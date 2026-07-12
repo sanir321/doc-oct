@@ -272,6 +272,15 @@ async def submit_answer(session_id: str, data: dict):
         if answer.strip():
             s["analysis"]["contact_email"] = answer.strip()
         s["answers"]["_email_ok"] = True
+    elif qtype == "title":
+        if answer.strip():
+            s["analysis"]["title"] = answer.strip()
+        s["answers"]["_title_ok"] = True
+    elif qtype == "keywords":
+        if answer.strip():
+            kws = [k.strip() for k in answer.replace(";", ",").split(",") if k.strip()]
+            s["analysis"]["keywords"] = kws
+        s["answers"]["_keywords_ok"] = True
     elif qtype in ("title_confirm", "title_correct"):
         if qtype == "title_confirm" and not answer.lower().startswith("y"):
             s["_last_qtype"] = "title_correct"

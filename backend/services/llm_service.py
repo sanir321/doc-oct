@@ -42,94 +42,128 @@ Document content:
     ])
 
 def generate_question(file_text: str, answers: dict, questions_asked: list, analysis: dict = None) -> dict:
+    analysis = analysis or {}
     str_answers = {k: v for k, v in answers.items() if isinstance(v, str)}
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in str_answers.items() if not q.startswith("_")]) if str_answers else "No answers yet."
     qa_text = "\n".join([f"- {q}" for q in questions_asked]) if questions_asked else "None"
 
-    title_val = (analysis or {}).get("title", "")
-    authors_val = (analysis or {}).get("authors") or []
+    title_val = analysis.get("title", "")
+    authors_val = analysis.get("authors") or []
+    keywords_val = analysis.get("keywords") or []
+    has_abstract = analysis.get("has_abstract", False)
+    present = analysis.get("present_sections") or []
+    missing = analysis.get("missing_info") or []
 
-    needs_title_confirm = title_val and title_val != "Unknown" and not answers.get("_title_ok") and not answers.get("_title_correct")
-    needs_authors_confirm = not answers.get("_authors_ok")
+    placeholder_authors = (not authors_val) or all(a in ("Author A", "Author B") for a in authors_val)
 
-    if needs_title_confirm:
+    # 1. TITLE — confirm if found, otherwise ask the user to supply it
+    if title_val and title_val != "Unknown":
+        if not answers.get("_title_ok") and not answers.get("_title_correct"):
+            return {
+                "ready": False,
+                "question": f"I read your document and found the title: \"{title_val}\". Is that the title you want on the paper?",
+                "options": ["Yes, that's correct", "No, I'll type a different title"],
+                "context": "Confirming the paper title.",
+                "type": "title_confirm"
+            }
+    elif not answers.get("_title_ok"):
         return {
             "ready": False,
-            "question": f"The extracted paper title is: \"{title_val}\". Is this correct?",
-            "options": ["Yes, correct", "No, let me type the correct title"],
-            "context": "The title appears at the top of the paper.",
-            "type": "title_confirm"
+            "question": "I couldn't find a clear title in your document. What should the paper be titled?",
+            "options": ["Use the document's first line as the title", "I'll type the title"],
+            "context": "A title is required for the paper.",
+            "type": "title"
         }
 
-    if not authors_val or all(a == "Author A" or a == "Author B" for a in authors_val):
+    # 2. AUTHORS — only asked when the document has no usable author names
+    if placeholder_authors:
         if not any("author" in q.lower() for q in questions_asked):
             return {
                 "ready": False,
-                "question": "Please provide the full name(s) of the author(s) for this paper. Separate multiple names with semicolons.",
+                "question": "Your document doesn't list any author names. Who should appear on the byline? (Separate multiple authors with semicolons.)",
                 "options": ["John Smith", "John Smith; Jane Doe"],
-                "context": "Author names are needed for the IEEE paper byline.",
+                "context": "Author names are needed for the IEEE byline.",
                 "type": "authors"
             }
-    elif needs_authors_confirm:
+    elif not answers.get("_authors_ok"):
         names_str = "; ".join(authors_val)
         return {
             "ready": False,
-            "question": f"Are these authors correct: {names_str}?",
+            "question": f"I extracted these author name(s): {names_str}. Are they correct?",
             "options": ["Yes, correct", "No, let me type the correct names"],
-            "context": "Author names appear in the paper byline.",
+            "context": "Confirming author names.",
             "type": "authors_confirm"
         }
 
-    if not answers.get("_affiliation_ok") and authors_val:
+    # 3. AFFILIATION
+    if authors_val and not answers.get("_affiliation_ok"):
         return {
             "ready": False,
-            "question": "What is the institutional affiliation (university, lab, or hospital) for the authors?",
+            "question": "Thanks. What is the institutional affiliation (university, lab, or company) for the author(s)?",
             "options": ["MIT", "Stanford University", "Indian Institute of Technology"],
-            "context": "Affiliation appears below each author name in the IEEE format.",
+            "context": "Affiliation appears below each author name.",
             "type": "affiliation"
         }
 
-    if not answers.get("_email_ok") and authors_val:
+    # 4. EMAIL (never present in a document, so always collect it)
+    if authors_val and not answers.get("_email_ok"):
         return {
             "ready": False,
-            "question": "What is the contact email for the corresponding author?",
+            "question": "And a contact email for the corresponding author, so readers can reach you?",
             "options": ["author@example.com"],
             "context": "Email appears in the IEEE author block.",
             "type": "email"
         }
 
-    # Detect if user already said they have no more data
+    # 5. KEYWORDS — only if the document didn't supply any
+    if not keywords_val and not answers.get("_keywords_ok"):
+        return {
+            "ready": False,
+            "question": "Lastly, what keywords should I index this paper under? (Comma-separated, e.g. reinforcement learning, drones, navigation)",
+            "options": ["machine learning, robotics", "deep learning, control systems"],
+            "context": "Index Terms help readers find the paper.",
+            "type": "keywords"
+        }
+
+    # 6. CONTENT GAPS — let the LLM ask about genuinely missing paper content
     user_said_no_more = any(
-        isinstance(a, str) and a.strip().lower().startswith("no") and ("more" in q.lower() or "additional" in q.lower() or "detailed" in q.lower() or "details" in q.lower() or "full" in q.lower() or "complete" in q.lower())
+        isinstance(a, str) and a.strip().lower().startswith("no") and any(w in q.lower() for w in ("more", "additional", "detailed", "details", "full", "complete"))
         for q, a in answers.items()
     )
+    found = []
+    if title_val:
+        found.append("a title")
+    if has_abstract:
+        found.append("an abstract")
+    if present:
+        found.append("these sections: " + ", ".join(present))
+    found_str = ", ".join(found) if found else "very little structured content"
+    miss_str = "; ".join(missing) if missing else "some details"
 
-    prompt = f"""Based on the uploaded document and previous answers, check if enough info exists to write a complete IEEE research paper.
+    prompt = f"""You are helping turn an uploaded document into an IEEE research paper. The bibliographic details (title, authors, affiliation, email, keywords) have already been collected from the user.
 
-The user has already answered "No" to questions about having more/additional/full details.
-{'The user has no further data to provide. Set ready=true and proceed with the available content.' if user_said_no_more else ''}
+What was found in the document: {found_str}.
+What appears to be missing or thin: {miss_str}.
+
+Previous answers from the user:
+{answers_text}
 
 Questions already asked: {qa_text}
 
-Previous answers:
-{answers_text}
+Your job: decide if you have enough to write a complete, accurate IEEE paper, or ask the user to fill ONE specific content gap.
+
+{'The user has indicated they have no more data. Set ready=true and write the paper from what is available.' if user_said_no_more else ''}
 
 Rules:
-- If enough info exists, respond with: {{"ready": true}}
-- If you MUST ask, ask AT MOST 1 question per response.
-- Use plain, simple language — avoid technical jargon.
-- Prioritize being "ready" — only ask if truly necessary.
-- Never ask more than 3 questions total across all rounds.
+- If enough info exists, respond: {{"ready": true}}
+- Otherwise ask AT MOST 1 question, in plain, friendly, conversational English.
+- Reference what you already know; ask only about a genuinely missing detail (e.g. methodology, results, datasets, contributions).
+- Do NOT re-ask for title, authors, affiliation, email, or keywords — those are already collected.
+- Be generous about being ready; only ask if a key part of the paper cannot be written at all.
 
-If asking: {{
-  "ready": false,
-  "question": "A simple question in plain English",
-  "options": ["Simple option 1", "Simple option 2"],
-  "context": "Briefly why this is needed"
-}}
-"""
+If asking: {{"ready": false, "question": "...", "options": ["short example 1", "short example 2"], "context": "why needed"}}"""
     return call_llm_json([
-        {"role": "system", "content": "You help write a research paper. Keep questions simple, few, and in plain English. When the user says they have no more data, set ready=true and write the paper from what is available."},
+        {"role": "system", "content": "You help write IEEE papers. Ask the user only about genuinely missing content, in friendly plain English. When the user has no more data, return ready=true."},
         {"role": "user", "content": f"Document: {file_text[:5000]}\n\n{prompt}"}
     ])
 
