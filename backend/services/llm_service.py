@@ -79,7 +79,16 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
             "type": "authors_confirm"
         }
 
+    # Detect if user already said they have no more data
+    user_said_no_more = any(
+        a.strip().lower().startswith("no") and ("more" in q.lower() or "additional" in q.lower() or "detailed" in q.lower() or "details" in q.lower() or "full" in q.lower() or "complete" in q.lower())
+        for q, a in answers.items()
+    )
+
     prompt = f"""Based on the uploaded document and previous answers, check if enough info exists to write a complete IEEE research paper.
+
+The user has already answered "No" to questions about having more/additional/full details.
+{'The user has no further data to provide. Set ready=true and proceed with the available content.' if user_said_no_more else ''}
 
 Questions already asked: {qa_text}
 
@@ -101,7 +110,7 @@ If asking: {{
 }}
 """
     return call_llm_json([
-        {"role": "system", "content": "You help write a research paper. Keep questions simple, few, and in plain English."},
+        {"role": "system", "content": "You help write a research paper. Keep questions simple, few, and in plain English. When the user says they have no more data, set ready=true and write the paper from what is available."},
         {"role": "user", "content": f"Document: {file_text[:5000]}\n\n{prompt}"}
     ])
 
