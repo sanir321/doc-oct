@@ -739,7 +739,7 @@ export default function PaperWizard({ onNewSession }) {
             </div>
           )}
 
-          {/* Result — contained window */}
+          {/* Result — PDF preview + downloads */}
           {result && (
             <div className="flex flex-col rounded-2xl border bg-surface-dark border-surface-dark-elevated overflow-hidden min-h-0"
               style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: 'calc(100vh - 180px)' }}>
@@ -766,13 +766,13 @@ export default function PaperWizard({ onNewSession }) {
                   </a>
                 </div>
               </div>
-              {result.paper_text && (
-                <div className="flex-1 overflow-y-auto p-5 md:p-8">
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap font-serif leading-relaxed" style={{ color: '#d4d0c8' }}>
-                    {result.paper_text}
-                  </div>
-                </div>
-              )}
+              <div className="flex-1 min-h-0">
+                <iframe
+                  src={apiService.getDownloadUrl(sessionId, "pdf")}
+                  className="w-full h-full border-0"
+                  title="PDF Preview"
+                />
+              </div>
             </div>
           )}
         </div>

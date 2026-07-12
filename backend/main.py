@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 import uvicorn
-import os, re, uuid, tempfile, json
+import os, re, uuid, tempfile, json, threading
 import PyPDF2
 from docx import Document
 from config import MAX_FILE_SIZE, UPLOAD_DIR
@@ -14,7 +14,38 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+SESSION_FILE = "sessions.json"
+_save_lock = threading.Lock()
+
 sessions = {}
+
+def _load_sessions():
+    global sessions
+    try:
+        if os.path.exists(SESSION_FILE):
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    sessions.update(loaded)
+    except Exception as e:
+        print(f"Session load warning: {e}")
+
+def _save_sessions():
+    try:
+        with _save_lock:
+            to_save = {}
+            for sid, s in sessions.items():
+                clean = {}
+                for k, v in s.items():
+                    if isinstance(v, (str, int, float, bool, list, dict, type(None))):
+                        clean[k] = v
+                to_save[sid] = clean
+            with open(SESSION_FILE, "w", encoding="utf-8") as f:
+                json.dump(to_save, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Session save warning: {e}")
+
+_load_sessions()
 
 def generate_ieee_html(title, authors, abstract, sections, keywords, domain, references=None):
     # Build author HTML with per-affiliation superscript markers
@@ -166,6 +197,7 @@ async def upload_file(file: UploadFile = File(...)):
 
     if question and session_id in sessions:
         sessions[session_id]["_last_qtype"] = question.get("type", "")
+    _save_sessions()
     return {"session_id": session_id, "analysis": analysis, "question": question}
 
 @app.post("/api/ask/{session_id}")
@@ -228,6 +260,7 @@ async def submit_answer(session_id: str, data: dict):
             s["analysis"]["title"] = answer.strip()
         s["answers"]["_title_ok"] = True
 
+    _save_sessions()
     clarity = check_answer_clear(s["file_text"], question, answer)
     if not clarity.get("clear"):
         return {"follow_up": clarity["follow_up"], "options": clarity.get("options", []), "needs_clarification": True}
@@ -374,6 +407,7 @@ def generate_stream(session_id: str):
             s["paper_text"] = paper_text
             result = parse_paper_text(paper_text, s["analysis"], session_id)
             s["html_content"] = result["html_content"]
+            _save_sessions()
             yield f"data: {json.dumps({'type': 'done', 'result': result})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
