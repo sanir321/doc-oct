@@ -92,19 +92,34 @@ Uploaded document context:
 Additional details from author:
 {answers_text}
 
-Write the full paper content as plain text with clear section headings. Include:
-1. Abstract
-2. Introduction
-3. Literature Review / Related Work
-4. Methodology / System Design
-5. Implementation
-6. Results & Discussion
-7. Conclusion
-8. References (generate realistic ones matching the domain)
+Output ONLY the paper content. Start directly with:
+## Abstract
+...abstract content...
+
+## Introduction
+...content...
+
+## Literature Review
+...content...
+
+## Methodology
+...content...
+
+## Implementation
+...content...
+
+## Results & Discussion
+...content...
+
+## Conclusion
+...content...
+
+## References
+...references...
 
 IMPORTANT: Use ONLY the facts from the uploaded document and author answers. Do not invent technical details that aren't supported."""
     messages = [
-        {"role": "system", "content": "You write IEEE conference research papers. Use the provided facts only — do not invent unsupported claims."},
+        {"role": "system", "content": "You are an IEEE research paper generator. Output ONLY the paper sections with ## headings. No thinking, no reasoning, no chain-of-thought. Start directly with ## Abstract."},
         {"role": "user", "content": prompt}
     ]
     with httpx.Client(timeout=300) as client:
