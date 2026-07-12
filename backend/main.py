@@ -310,9 +310,9 @@ async def download(session_id: str, fmt: str):
             m = re.search(regex, html, re.DOTALL)
             return m.group(group).strip() if m else ""
 
-        title = extract_section(r"<h1>(.*?)</h1>", html)
+        title = extract_section(r'<h1>(.*?)</h1>', html)
         abstract = extract_section(r'abstract-label">(.*?)</span>\s*<p>(.*?)</p>', html, 2)
-        keywords = extract_section(r"kw-label">.*?</span>(.*?)</div>", html)
+        keywords = extract_section(r'kw-label">.*?</span>(.*?)</div>', html)
         abstract = re.sub(r'<[^>]+>', '', abstract)
         keywords = re.sub(r'<[^>]+>', '', keywords)
 
