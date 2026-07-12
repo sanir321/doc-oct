@@ -62,7 +62,7 @@ const FEATURES = [
   },
   {
     title: 'LaTeX & HTML Export',
-    desc: 'Download .tex for Overleaf or HTML for instant print-to-PDF in your browser.',
+    desc: 'Download HTML for instant print-to-PDF or PDF directly from your browser.',
   },
 ];
 

@@ -769,11 +769,6 @@ export default function PaperWizard({ onNewSession }) {
                   </svg>
                   Download PDF
                 </a>
-                <a href={apiService.getDownloadUrl(sessionId, "tex")}
-                  className="rounded-full text-sm font-medium px-5 py-2.5 border transition-all active:scale-[0.95] inline-flex items-center gap-2 border-surface-dark-elevated text-on-dark-soft hover:border-on-dark-soft hover:text-white"
-                  download={result.filename_tex}>
-                  Download .tex (Overleaf)
-                </a>
                 <a href={apiService.getDownloadUrl(sessionId, "html")}
                   className="rounded-full text-sm font-medium px-5 py-2.5 border transition-all active:scale-[0.95] border-surface-dark-elevated text-muted hover:border-on-dark-soft hover:text-white"
                   download={result.filename_html}>

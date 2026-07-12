@@ -340,15 +340,6 @@ def parse_paper_text(paper_text, analysis, session_id):
             {"citation": f"C. Williams, ``{analysis.get('domain', 'Technology')} Innovation,'' IEEE J., vol. 12, no. 4, pp. 789-801, 2023."},
         ]
 
-    latex_content = generate_latex_paper(
-        title=analysis.get("title", "Research Paper"),
-        authors=authors_data,
-        sections=other_sections,
-        abstract=abstract_section or abstract or paper_text[:500],
-        keywords=analysis.get("keywords", [analysis.get("domain", "Technology")]),
-        references=refs
-    )
-
     html_content = generate_ieee_html(
         title=analysis.get("title", "Research Paper"),
         authors=authors_data,
@@ -362,11 +353,8 @@ def parse_paper_text(paper_text, analysis, session_id):
     return {
         "paper_text": paper_text,
         "html_content": html_content,
-        "latex_content": latex_content,
         "download_html": f"/api/download/{session_id}/html",
-        "download_latex": f"/api/download/{session_id}/tex",
-        "filename_html": f"{base_name}.html",
-        "filename_tex": f"{base_name}.tex"
+        "filename_html": f"{base_name}.html"
     }
 
 @app.get("/api/generate-stream/{session_id}")
@@ -385,7 +373,6 @@ def generate_stream(session_id: str):
 
             s["paper_text"] = paper_text
             result = parse_paper_text(paper_text, s["analysis"], session_id)
-            s["latex_content"] = result["latex_content"]
             s["html_content"] = result["html_content"]
             yield f"data: {json.dumps({'type': 'done', 'result': result})}\n\n"
         except Exception as e:
@@ -402,9 +389,6 @@ async def download(session_id: str, fmt: str):
     if fmt == "html" and s.get("html_content"):
         return Response(content=s["html_content"], media_type="text/html",
                         headers={"Content-Disposition": f"attachment; filename={base}.html"})
-    if fmt == "tex" and s.get("latex_content"):
-        return Response(content=s["latex_content"], media_type="text/plain",
-                        headers={"Content-Disposition": f"attachment; filename={base}.tex"})
     if fmt == "pdf" and s.get("html_content"):
         from fpdf import FPDF
         html = s["html_content"]
@@ -572,45 +556,6 @@ async def download(session_id: str, fmt: str):
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={base}.pdf"})
     raise HTTPException(404, "Format not found")
-
-def escape_latex(text):
-    if not text: return ""
-    for k, v in {"&": r"\&", "%": r"\%", "#": r"\#", "_": r"\_", "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}"}.items():
-        text = text.replace(k, v)
-    return text
-
-def fmt_content(text):
-    text = re.sub(r'\*\*([^*\n]+?)\*\*', r'\\textbf{\1}', text)
-    text = re.sub(r'(?<!\*)\*(?!\*)([^*\n]+?)(?<!\*)\*(?!\*)', r'\\textit{\1}', text)
-    text = text.replace('*', '')
-    return escape_latex(text)
-
-def generate_latex_paper(title, authors, sections, abstract=None, keywords=None, references=None):
-    if not authors:
-        authors = [{"name": "Author A", "affiliation": "University"}]
-    names = ", ".join(a["name"] for a in authors)
-    affil = authors[0].get("affiliation", "University")
-    author_block = rf"\author{{\IEEEauthorblockN{{{names}}}\\\IEEEauthorblockA{{{affil}}}}}"
-    abstract_block = rf"\begin{{abstract}}{escape_latex(abstract)}\end{{abstract}}" if abstract else ""
-    kw_block = rf"\begin{{IEEEkeywords}}{', '.join(escape_latex(k) for k in (keywords or []))}\end{{IEEEkeywords}}" if keywords else ""
-    secs = "\n\n".join(f"\\section{{{escape_latex(s['title'])}}}\n{fmt_content(s['content'])}" for s in sections)
-    refs = ""
-    if references:
-        refs = r"\begin{thebibliography}{99}" + "\n" + "\n".join(f"\\bibitem{{ref{i}}} {escape_latex(r['citation'])}" for i, r in enumerate(references, 1)) + r"\end{thebibliography}"
-    return rf"""\documentclass[conference,10pt]{{IEEEtran}}
-\IEEEoverridecommandlockouts
-\usepackage{{cite,amsmath,amssymb,amsfonts,graphicx,textcomp,xcolor,balance}}
-\sloppy
-\title{{{escape_latex(title)}}}
-{author_block}
-\begin{{document}}
-\maketitle
-{abstract_block}
-{kw_block}
-{secs}
-{refs}
-\balance
-\end{{document}}"""
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
