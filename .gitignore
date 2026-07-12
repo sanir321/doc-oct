@@ -19,3 +19,6 @@ build/
 test_*
 sample_*
 *.pdf
+check*.html
+SmartDoc_AI*.html
+test_*.html
