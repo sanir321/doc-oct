@@ -211,6 +211,10 @@ async def submit_answer(session_id: str, data: dict):
                 "context": "Correct names for the paper byline.",
                 "type": "authors_confirm_no"
             }
+    elif qtype == "affiliation":
+        if answer.strip():
+            s["analysis"]["affiliation"] = answer.strip()
+        s["answers"]["_affiliation_ok"] = True
     elif qtype in ("title_confirm", "title_correct"):
         if qtype == "title_confirm" and not answer.lower().startswith("y"):
             s["_last_qtype"] = "title_correct"
@@ -314,10 +318,10 @@ def parse_paper_text(paper_text, analysis, session_id):
         abstract_section = intro[:500]
 
     authors = analysis.get("authors") or ["Author A", "Author B"]
-    domain = analysis.get("domain") or "Engineering"
+    affiliation = analysis.get("affiliation") or analysis.get("domain") or "Engineering"
     authors_data = []
     for i, author in enumerate(authors):
-        authors_data.append({"name": author, "affiliation": f"Department of {domain}"})
+        authors_data.append({"name": author, "affiliation": affiliation})
 
     refs = []
     for sec in other_sections[:]:

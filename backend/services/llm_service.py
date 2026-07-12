@@ -80,6 +80,15 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
             "type": "authors_confirm"
         }
 
+    if not answers.get("_affiliation_ok") and authors_val:
+        return {
+            "ready": False,
+            "question": "What is the institutional affiliation (university, lab, or hospital) for the authors?",
+            "options": ["MIT", "Stanford University", "Indian Institute of Technology"],
+            "context": "Affiliation appears below each author name in the IEEE format.",
+            "type": "affiliation"
+        }
+
     # Detect if user already said they have no more data
     user_said_no_more = any(
         isinstance(a, str) and a.strip().lower().startswith("no") and ("more" in q.lower() or "additional" in q.lower() or "detailed" in q.lower() or "details" in q.lower() or "full" in q.lower() or "complete" in q.lower())
