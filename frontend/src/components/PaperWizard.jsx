@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { apiService, BASE } from '../config/api';
+import LogoMark from './LogoMark';
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
@@ -64,26 +65,13 @@ function DocIcon({ color }) {
   );
 }
 
-function LogoMark({ size = 20 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-      <rect x="5" y="3" width="22" height="26" rx="2" stroke="#cc785c" strokeWidth="1.5" />
-      <line x1="9" y1="10" x2="23" y2="10" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="9" y1="15" x2="20" y2="15" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="9" y1="20" x2="17" y2="20" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
-      <circle cx="27" cy="6" r="6" fill="#cc785c"/>
-      <path d="M25 6h4M27 4v4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
 function Sidebar({ current, history, onSelectDoc, onReset }) {
   let profile = null;
   try { const p = localStorage.getItem('userProfile'); if (p) profile = JSON.parse(p); } catch {}
 
   return (
-    <aside className="hidden md:flex flex-col w-64 shrink-0">
-      <div className="flex-1 rounded-2xl border border-hairline bg-surface-card flex flex-col overflow-hidden"
+    <aside className="hidden md:flex flex-col w-64 shrink-0 min-h-0 h-full">
+      <div className="flex-1 rounded-2xl border border-hairline bg-surface-card flex flex-col overflow-y-auto min-h-0"
         style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
         {/* Header */}
         <div className="px-4 py-3.5 border-b border-hairline shrink-0 flex items-center gap-2.5 text-ink">
@@ -91,8 +79,8 @@ function Sidebar({ current, history, onSelectDoc, onReset }) {
           <span className="text-sm font-medium">Research Paper AI</span>
         </div>
 
-        {/* Document list — no scroll */}
-        <div className="flex-1 overflow-hidden p-3 space-y-2">
+        {/* Document list */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {history.length === 0 && !current && (
             <div className="text-center py-8">
               <p className="text-xs font-mono uppercase mb-1 text-muted">Empty</p>
@@ -389,7 +377,7 @@ export default function PaperWizard({ onNewSession }) {
   } : null;
 
   return (
-    <div className="flex flex-1 p-3 md:p-4 gap-3 md:gap-6">
+    <div className="flex flex-1 min-h-0 p-3 md:p-4 gap-3 md:gap-6">
       <Sidebar
         current={currentDocInfo}
         history={uploadHistory}
@@ -398,8 +386,9 @@ export default function PaperWizard({ onNewSession }) {
       />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-        <div className="flex-1 flex flex-col max-w-5xl w-full mx-auto py-6 space-y-6 min-h-0">
-          {/* Step indicators */}
+        <div className={`flex-1 flex flex-col max-w-5xl w-full mx-auto min-h-0 ${(result || generating) ? 'py-0 space-y-0' : 'py-6 space-y-6'}`}>
+          {/* Step indicators — hidden when generating or viewing result */}
+          {!result && !generating && (
           <div className="flex justify-center items-center gap-0.5 md:gap-1 flex-wrap">
             {steps.map((s, i) => (
               <div key={s} className="flex items-center">
@@ -428,6 +417,7 @@ export default function PaperWizard({ onNewSession }) {
               </div>
             ))}
           </div>
+          )}
 
           {error && (
             <div className="rounded-2xl p-4 text-sm border shrink-0"
@@ -734,8 +724,8 @@ export default function PaperWizard({ onNewSession }) {
 
           {/* Live document preview while generating */}
           {generating && (
-            <div className="flex flex-col border rounded-2xl overflow-hidden flex-1 min-h-0 bg-surface-dark border-surface-dark-elevated"
-              style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)' }}>
+            <div className="flex flex-col border rounded-2xl overflow-hidden bg-surface-dark border-surface-dark-elevated min-h-0"
+              style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: 'calc(100vh - 180px)' }}>
               <div className="px-5 py-3 border-b border-surface-dark-elevated shrink-0 flex items-center gap-2 text-muted">
                 <span className="w-2 h-2 rounded-full animate-pulse bg-accent-teal" />
                 <span className="text-xs font-mono">Generating paper</span>
@@ -749,45 +739,40 @@ export default function PaperWizard({ onNewSession }) {
             </div>
           )}
 
-          {/* Result */}
+          {/* Result — contained window */}
           {result && (
-            <div className="rounded-2xl p-5 md:p-8 border bg-surface-dark border-surface-dark-elevated"
-              style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)' }}>
-              <h2 className="text-xl md:text-2xl font-display font-normal leading-[1.15] mb-4 text-on-dark"
-                style={{ letterSpacing: '-0.5px' }}>
-                Paper generated <span className="text-accent-teal">✓</span>
-              </h2>
-              <div className="flex flex-wrap gap-3 mb-4">
-                <a href={apiService.getDownloadUrl(sessionId, "pdf")}
-                  className="rounded-full text-sm font-medium px-5 py-2.5 transition-all active:scale-[0.95] inline-flex items-center gap-2 bg-primary text-white"
-                  download={result.filename_html.replace('.html', '.pdf')}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                  </svg>
-                  Download PDF
-                </a>
-                <a href={apiService.getDownloadUrl(sessionId, "html")}
-                  className="rounded-full text-sm font-medium px-5 py-2.5 border transition-all active:scale-[0.95] border-surface-dark-elevated text-muted hover:border-on-dark-soft hover:text-white"
-                  download={result.filename_html}>
-                  Download HTML
-                </a>
+            <div className="flex flex-col rounded-2xl border bg-surface-dark border-surface-dark-elevated overflow-hidden min-h-0"
+              style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: 'calc(100vh - 180px)' }}>
+              <div className="px-5 md:px-8 py-4 border-b border-surface-dark-elevated shrink-0 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-display text-on-dark flex items-center gap-2">
+                  Paper generated <span className="text-accent-teal">✓</span>
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  <a href={apiService.getDownloadUrl(sessionId, "pdf")}
+                    className="rounded-full text-sm font-medium px-4 py-1.5 transition-all active:scale-[0.95] inline-flex items-center gap-1.5 bg-primary text-white"
+                    download={result.filename_html.replace('.html', '.pdf')}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" />
+                      <line x1="16" y1="17" x2="8" y2="17" />
+                    </svg>
+                    Download PDF
+                  </a>
+                  <a href={apiService.getDownloadUrl(sessionId, "html")}
+                    className="rounded-full text-sm font-medium px-4 py-1.5 border transition-all active:scale-[0.95] border-surface-dark-elevated text-muted hover:border-on-dark-soft hover:text-white"
+                    download={result.filename_html}>
+                    Download HTML
+                  </a>
+                </div>
               </div>
               {result.paper_text && (
-                <>
-                  <hr className="border-t border-surface-dark-elevated my-6" />
-                  <p className="text-xs font-mono uppercase tracking-wider mb-3 text-muted">Preview</p>
-                  <div className="rounded-2xl p-4 text-sm max-h-96 overflow-y-auto whitespace-pre-wrap font-mono bg-surface-dark-soft text-on-dark-soft">
-                    {result.paper_text.slice(0, 2000)}
+                <div className="flex-1 overflow-y-auto p-5 md:p-8">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap font-serif leading-relaxed" style={{ color: '#d4d0c8' }}>
+                    {result.paper_text}
                   </div>
-                </>
+                </div>
               )}
-              <button className="mt-6 text-sm transition-colors text-on-dark-soft hover:text-on-dark"
-                onClick={handleReset}>
-                Start Over
-              </button>
             </div>
           )}
         </div>

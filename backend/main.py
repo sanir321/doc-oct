@@ -413,144 +413,41 @@ async def download(session_id: str, fmt: str):
             t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
             t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
             return t.encode('ascii', 'replace').decode('ascii')
-        title, abstract, keywords = ascii_safe(title), ascii_safe(abstract), ascii_safe(keywords)
-        sections = [(ascii_safe(t), ascii_safe(c)) for t, c in sections]
+        title = ascii_safe(title)
+        abstract = ascii_safe(abstract)
+        keywords = ascii_safe(keywords)
 
         pdf = FPDF(orientation="P", unit="mm", format="A4")
-        pdf.set_auto_page_break(auto=False)
-        lm, tm, rm = 18, 15, 18
+        pdf.set_auto_page_break(auto=True, margin=18)
+        lm, rm = 20, 20
         pw = 210
-        col_w = (pw - lm - rm - 6) / 2
-        gutter = 6
-        bh = 297 - 18
-
-        def write_title_block():
-            pdf.set_font("Times", "B", 24)
-            pdf.multi_cell(pw - lm - rm, 10, title, align="C", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(4)
-            if abstract:
-                pdf.set_font("Times", "BI", 9)
-                pdf.multi_cell(pw - lm - rm, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(2)
-            if keywords:
-                pdf.set_font("Times", "I", 10)
-                pdf.multi_cell(pw - lm - rm, 5, f"Index Terms -- {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(4)
-            return pdf.get_y()
-
-        col = 0
-        cy = 0
-        first_page = True
-
-        def ensure_space(h):
-            nonlocal col, cy, first_page
-            need = cy + h
-            if need > bh:
-                if col == 0:
-                    col = 1
-                    cy = tm
-                    pdf.set_xy(lm + col_w + gutter, cy)
-                else:
-                    pdf.add_page()
-                    first_page = False
-                    col = 0
-                    cy = tm
-                    pdf.set_xy(lm, cy)
+        cw = pw - lm - rm
 
         pdf.add_page()
-        cy = write_title_block()
-
-        def render_table(table_para, x_start, cy):
-            nonlocal col, first_page
-            lines = table_para.strip().split('\n')
-            lines = [l.strip() for l in lines if l.strip()]
-            parsed_rows = []
-            max_cols = 0
-            for line in lines:
-                if '|' not in line:
-                    continue
-                if re.match(r'^[\s\|\+\-\=]+$', line):
-                    continue
-                cells = [c.strip() for c in line.split('|')]
-                if line.startswith('|'):
-                    cells = cells[1:]
-                if line.endswith('|'):
-                    cells = cells[:-1]
-                if cells:
-                    max_cols = max(max_cols, len(cells))
-                    parsed_rows.append(cells)
-            if not parsed_rows or max_cols == 0:
-                pdf.set_font("Times", "", 10)
-                pdf.set_xy(x_start, cy)
-                pdf.multi_cell(col_w, 5.5, table_para, align="J", new_x="LMARGIN", new_y="NEXT")
-                return pdf.get_y()
-            cell_w = max(10, col_w / max_cols)
-            line_h = 5.5
-            y = cy
-            row_heights = []
-            for row_idx, row in enumerate(parsed_rows):
-                padded = row + [''] * (max_cols - len(row))
-                max_h = 0
-                for cell_text in padded:
-                    tw = pdf.get_string_width(cell_text or "")
-                    num_lines = max(1, int(tw / max(1, cell_w - 2)) + 1)
-                    max_h = max(max_h, num_lines * line_h)
-                max_h = max(max_h, line_h + 1)
-                row_heights.append(max_h)
-            pdf.set_line_width(0.2)
-            pdf.set_draw_color(80, 80, 80)
-            for row_idx, row in enumerate(parsed_rows):
-                padded = row + [''] * (max_cols - len(row))
-                rh = row_heights[row_idx]
-                if y + rh > bh:
-                    if col == 0:
-                        col = 1
-                        y = tm
-                        pdf.set_xy(lm + col_w + gutter, y)
-                    else:
-                        pdf.add_page()
-                        first_page = False
-                        col = 0
-                        y = tm
-                        pdf.set_xy(lm, y)
-                if row_idx == 0:
-                    pdf.set_font("Times", "B", 9.5)
-                else:
-                    pdf.set_font("Times", "", 9.5)
-                current_x = x_start
-                for ci, cell_text in enumerate(padded):
-                    cx = current_x + ci * cell_w
-                    pdf.rect(cx, y, cell_w, rh)
-                    pdf.set_xy(cx + 0.5, y + 0.5)
-                    pdf.multi_cell(cell_w - 1, line_h, cell_text or "", align="L")
-                y += rh
-            return y
+        pdf.set_font("Times", "B", 20)
+        pdf.multi_cell(cw, 9, title, align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
+        if abstract:
+            pdf.set_font("Times", "I", 10)
+            pdf.multi_cell(cw, 5, f"Abstract\u2014{abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+        if keywords:
+            pdf.set_font("Times", "I", 10)
+            pdf.multi_cell(cw, 5, f"Index Terms\u2014{keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(4)
 
         for sec_title, sec_content in sections:
-            ensure_space(8)
-            pdf.set_font("Times", "B", 10)
-            pdf.set_xy(lm + (col_w + gutter) * col, cy)
-            pdf.multi_cell(col_w, 5.5, sec_title, align="J", new_x="LMARGIN", new_y="NEXT")
-            cy = pdf.get_y()
+            pdf.set_font("Times", "B", 12)
+            pdf.multi_cell(cw, 6, sec_title, align="L", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(1)
-            cy = pdf.get_y()
 
             for para in sec_content.split('\n'):
                 para = para.strip()
                 if not para:
                     continue
-                ensure_space(6)
-                x_start = lm + (col_w + gutter) * col
-                if '|' in para:
-                    pdf.set_xy(x_start, cy)
-                    cy = render_table(para, x_start, cy)
-                else:
-                    pdf.set_font("Times", "", 10)
-                    pdf.set_xy(x_start, cy)
-                    pdf.multi_cell(col_w, 5.5, para, align="J", new_x="LMARGIN", new_y="NEXT")
-                    cy = pdf.get_y()
+                pdf.set_font("Times", "", 10)
+                pdf.multi_cell(cw, 5, para, align="J", new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(1)
-                cy = pdf.get_y()
 
         pdf_bytes = bytes(pdf.output())
         return Response(content=pdf_bytes, media_type="application/pdf",

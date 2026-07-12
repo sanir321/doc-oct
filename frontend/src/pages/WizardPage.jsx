@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import PaperWizard from '../components/PaperWizard';
+import LogoMark from '../components/LogoMark';
 
 export default function WizardPage() {
   const [sessionKey, setSessionKey] = useState(0);
@@ -17,11 +18,7 @@ export default function WizardPage() {
             WebkitBackdropFilter: 'blur(12px)',
           }}>
           <Link to="/" className="flex items-center gap-2.5 text-sm font-medium tracking-tight hover:opacity-80 transition-opacity" style={{ color: '#eeede9' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#cc785c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 3L1 9l7 6" />
-              <path d="M16 3l7 6-7 6" />
-              <line x1="14" y1="2" x2="10" y2="22" />
-            </svg>
+            <LogoMark size={16} />
             Research Paper Generator
           </Link>
           <div className="flex items-center gap-2">
@@ -36,7 +33,7 @@ export default function WizardPage() {
         </nav>
       </div>
 
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-h-0">
         <PaperWizard key={sessionKey} onNewSession={() => setSessionKey(k => k + 1)} />
       </div>
     </div>
