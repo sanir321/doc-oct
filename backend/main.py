@@ -345,12 +345,12 @@ async def download(session_id: str, fmt: str):
 
             if abstract:
                 pdf.set_font("Times", "BI", 10)
-                pdf.multi_cell(210 - lm - rm, 5, f"Abstract \u2014 {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+                pdf.multi_cell(210 - lm - rm, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(2)
 
             if keywords:
                 pdf.set_font("Times", "I", 10)
-                pdf.multi_cell(210 - lm - rm, 5, f"Index Terms \u2014 {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
+                pdf.multi_cell(210 - lm - rm, 5, f"Index Terms -- {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(4)
 
             return pdf.get_y()
