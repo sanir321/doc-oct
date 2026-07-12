@@ -64,6 +64,19 @@ function DocIcon({ color }) {
   );
 }
 
+function LogoMark({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <rect x="5" y="3" width="22" height="26" rx="2" stroke="#cc785c" strokeWidth="1.5" />
+      <line x1="9" y1="10" x2="23" y2="10" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="9" y1="15" x2="20" y2="15" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="9" y1="20" x2="17" y2="20" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="27" cy="6" r="6" fill="#cc785c"/>
+      <path d="M25 6h4M27 4v4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
 function Sidebar({ current, history, onSelectDoc, onReset }) {
   let profile = null;
   try { const p = localStorage.getItem('userProfile'); if (p) profile = JSON.parse(p); } catch {}
@@ -74,10 +87,8 @@ function Sidebar({ current, history, onSelectDoc, onReset }) {
         style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
         {/* Header */}
         <div className="px-4 py-3.5 border-b border-hairline shrink-0 flex items-center gap-2.5 text-ink">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cc785c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
-          <span className="text-sm font-medium">Documents</span>
+          <LogoMark size={16} />
+          <span className="text-sm font-medium">Research Paper AI</span>
         </div>
 
         {/* Document list — no scroll */}
@@ -454,13 +465,7 @@ export default function PaperWizard({ onNewSession }) {
                       transform: dragOver ? 'scale(1.1)' : 'scale(1)',
                       transition: 'transform 0.3s',
                     }}>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-                      stroke="#6c6a64" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                      <line x1="12" y1="12" x2="12" y2="18" />
-                      <line x1="9" y1="15" x2="15" y2="15" />
-                    </svg>
+                    <LogoMark size={32} />
                   </div>
                   <p className="text-lg mb-1.5 font-medium" style={{ color: '#141413' }}>
                     {dragOver ? 'Release to upload' : 'Upload your research documents'}
