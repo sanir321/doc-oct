@@ -167,19 +167,6 @@ If asking: {{"ready": false, "question": "...", "options": ["short example 1", "
         {"role": "user", "content": f"Document: {file_text[:5000]}\n\n{prompt}"}
     ])
 
-def check_answer_clear(file_text: str, question: str, answer: str) -> dict:
-    prompt = f"""The user answered: "{answer}" to the question: "{question}"
-
-Be generous — accept the answer as clear unless it's truly empty or off-topic.
-If clear: {{"clear": true}}
-If unclear (rare): {{"clear": false, "follow_up": "A simple clarifying question in plain English", "options": ["Simple option 1", "Simple option 2"]}}
-"""
-    return call_llm_json([
-        {"role": "system", "content": "Be generous — accept answers as clear unless they're empty or completely off-topic."},
-        {"role": "user", "content": prompt}
-    ])
-
-
 def edit_paper(paper_text: str, instruction: str, current_title: str = "") -> str:
     prompt = f"""You are editing an IEEE-format research paper based on the user's instruction.
 

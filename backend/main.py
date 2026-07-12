@@ -6,7 +6,7 @@ import os, re, uuid, tempfile, json
 import PyPDF2
 from docx import Document
 from config import MAX_FILE_SIZE, UPLOAD_DIR
-from services.llm_service import analyze_document, generate_question, check_answer_clear, generate_paper_stream, edit_paper
+from services.llm_service import analyze_document, generate_question, generate_paper_stream, edit_paper
 
 app = FastAPI(title="Research Paper Generator")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -294,10 +294,7 @@ async def submit_answer(session_id: str, data: dict):
             s["analysis"]["title"] = answer.strip()
         s["answers"]["_title_ok"] = True
 
-    clarity = check_answer_clear(s["file_text"], question, answer)
-    if not clarity.get("clear"):
-        return {"follow_up": clarity["follow_up"], "options": clarity.get("options", []), "needs_clarification": True}
-
+    # ponytail: skip the extra clarity-gate LLM call — always advance
     q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"], s.get("analysis"))
     if q_result.get("ready"):
         s["ready"] = True
