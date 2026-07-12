@@ -89,6 +89,15 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
             "type": "affiliation"
         }
 
+    if not answers.get("_email_ok") and authors_val:
+        return {
+            "ready": False,
+            "question": "What is the contact email for the corresponding author?",
+            "options": ["author@example.com"],
+            "context": "Email appears in the IEEE author block.",
+            "type": "email"
+        }
+
     # Detect if user already said they have no more data
     user_said_no_more = any(
         isinstance(a, str) and a.strip().lower().startswith("no") and ("more" in q.lower() or "additional" in q.lower() or "detailed" in q.lower() or "details" in q.lower() or "full" in q.lower() or "complete" in q.lower())
@@ -153,7 +162,7 @@ def generate_paper_stream(file_text: str, answers: dict, analysis: dict):
 
 Title: {title}{domain_instruction}{kw_instruction}{sections_instruction}
 
-Ground every claim in the document context below. You may invent plausible references (author, title, venue, year) for a realistic bibliography. Do NOT invent any numerical results, paper counts, statistics, or specific metrics not present in the document.
+Ground every claim in the document context below. You may invent plausible references (author, title, venue, year) and a brief professional bio for each author for a realistic bibliography and About the Authors section. Do NOT invent any numerical results, paper counts, statistics, or specific metrics not present in the document.
 
 Structure the paper with these ##-prefixed sections in order:
 - ## Abstract
@@ -163,12 +172,15 @@ Structure the paper with these ##-prefixed sections in order:
 - ## Results and Discussion
 - ## Conclusion
 - ## References
+- ## About the Authors
 
 Rules:
 - Start with ## Abstract (one paragraph summarising the paper).
 - Each ## section should be 2–4 paragraphs of focused analysis.
-- Never include reasoning, chain-of-thought, thinking blocks, or meta-commentary. Output only the paper content.
 - The ## References section must contain at least 5 IEEE-formatted references like: [1] J. Smith, "Title," Journal Name, vol. X, no. Y, pp. Z-Z, year.
+- The ## About the Authors section must list each author (bold name) with a 1–2 sentence professional biography.
+- If helpful, you may include one markdown table (using | separators) inside a body section, with a "Table 1. ..." caption line above it.
+- Never include reasoning, chain-of-thought, thinking blocks, or meta-commentary. Output only the paper content.
 
 Document context: {file_text[:12000]}
 

@@ -15,6 +15,54 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 sessions = {}
 
+def _render_body(content):
+    """Turn raw section text into HTML: paragraphs, markdown tables, captions."""
+    def esc(t):
+        return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    def is_sep(line):
+        s = line.strip().strip("|")
+        return bool(s) and set(s) <= set("-: |") and "-" in s
+    def is_caption(s):
+        return bool(re.match(r'^(figure|table)\s*\d*\.?\s', s, re.I))
+    def md_table(rows):
+        def cells(r):
+            return [c.strip() for c in r.strip().strip("|").split("|")]
+        header = cells(rows[0])
+        body = [cells(r) for r in rows[2:] if "|" in r]
+        th = "".join(f'<th class="tablehead">{esc(c)}</th>' for c in header)
+        trs = "".join(
+            "<tr>" + "".join(f'<td class="tabletext">{esc(c)}</td>' for c in r) + "</tr>"
+            for r in body
+        )
+        return f'<table class="ieee-table"><thead><tr>{th}</tr></thead><tbody>{trs}</tbody></table>'
+
+    lines = [l.rstrip() for l in content.split("\n")]
+    out, i, n = [], 0, len(lines)
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+        if not stripped:
+            i += 1
+            continue
+        if "|" in stripped and i + 1 < n and is_sep(lines[i + 1]):
+            rows = []
+            while i < n and "|" in lines[i].strip():
+                rows.append(lines[i].strip())
+                i += 1
+            out.append(md_table(rows))
+            continue
+        if is_caption(stripped):
+            out.append(f'<div class="caption">{esc(stripped)}</div>')
+            i += 1
+            continue
+        para = [stripped]
+        i += 1
+        while i < n and lines[i].strip() and "|" not in lines[i] and not is_sep(lines[i]) and not is_caption(lines[i].strip()):
+            para.append(lines[i].strip())
+            i += 1
+        out.append(f'<p>{esc(" ".join(para))}</p>')
+    return "".join(out)
+
 def generate_ieee_html(title, authors, abstract, sections, keywords, domain, references=None):
     # Build author HTML with per-affiliation superscript markers
     authors_html = ""
@@ -31,13 +79,15 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
                 sup = f'<sup>{affil_map[affil]}</sup>'
             else:
                 sup = ""
+            email = a.get("email", "")
+            email_html = f'<br><span class="email">{email}</span>' if email else ""
             author_parts.append(
-                f'<div class="author">{a["name"]}{sup}<br><span class="affil">{affil}</span></div>'
+                f'<div class="author">{a["name"]}{sup}<br><span class="affil">{affil}</span>{email_html}</div>'
             )
         authors_html = "".join(author_parts)
 
     sections_html = "".join(
-        f'<div class="section"><h2>{s["title"]}</h2><p>{s["content"].replace(chr(10), "<br>")}</p></div>'
+        f'<div class="section"><h2>{s["title"]}</h2>{_render_body(s["content"])}</div>'
         for s in sections
     )
     keywords_str = ", ".join(keywords)
@@ -62,6 +112,7 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
   .authors {{ text-align: center; font-size: 12pt; margin-bottom: 18px; font-family: "Times New Roman", Times, serif; }}
   .author {{ display: inline-block; margin: 0 16px; }}
   .affil {{ font-size: 10pt; font-style: italic; }}
+  .email {{ font-size: 10pt; }}
   sup {{ font-size: 8pt; vertical-align: super; line-height: 1; }}
   .abstract {{ margin: 12px 0; padding: 0; }}
   .abstract-label {{ font-size: 10pt; font-weight: bold; font-style: italic; }}
@@ -70,21 +121,24 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
   .keywords {{ font-size: 10pt; margin-bottom: 12px; font-style: italic; }}
   .content {{ column-count: 2; column-gap: 0.25in; }}
   .section {{ margin-bottom: 0; }}
-  .section h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: left; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; letter-spacing: 0.5pt; }}
+  .section h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; letter-spacing: 0.5pt; }}
   .section h3 {{ font-size: 10pt; font-style: italic; font-weight: normal; text-align: left; margin: 9pt 0 3pt 0; font-family: "Times New Roman", Times, serif; }}
   .section p {{ text-align: justify; text-indent: 0.17in; margin-bottom: 0; line-height: 1.15; }}
-  table {{ border-collapse: collapse; width: 100%; font-size: 9pt; margin: 8px 0; }}
-  th, td {{ border: 0.5pt solid black; padding: 3px 6px; text-align: center; }}
+  .caption {{ font-size: 10pt; font-variant: small-caps; text-align: left; margin: 6pt 0; font-family: "Times New Roman", Times, serif; }}
+  table.ieee-table {{ border-collapse: collapse; width: 100%; font-size: 9pt; margin: 8px 0; }}
+  table.ieee-table th, table.ieee-table td {{ border: 0.5pt solid black; padding: 3px 6px; text-align: center; }}
+  .tablehead {{ font-variant: small-caps; font-weight: bold; }}
+  .tabletext {{ text-align: left; }}
   .references {{ margin-top: 12px; }}
-  .references h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: left; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; }}
+  .references h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; }}
   .references p {{ font-size: 9pt; margin-left: 0.25in; text-indent: -0.25in; line-height: 1.15; margin-bottom: 6pt; text-align: left; }}
   @media print {{ body {{ padding: 0; }} }}
 </style></head><body>
 <div class="paper">
   <h1>{title}</h1>
   <div class="authors">{authors_html}</div>
-  <div class="abstract"><span class="abstract-label">Abstract — </span><p>{abstract}</p></div>
-  <div class="keywords"><span class="kw-label">Index Terms — </span>{keywords_str}</div>
+  <div class="abstract"><span class="abstract-label">Abstract - </span><p>{abstract}</p></div>
+  <div class="keywords"><span class="kw-label">Index Terms - </span>{keywords_str}</div>
   <div class="content">{sections_html}</div>
   {refs_html}
 </div>
@@ -214,6 +268,10 @@ async def submit_answer(session_id: str, data: dict):
         if answer.strip():
             s["analysis"]["affiliation"] = answer.strip()
         s["answers"]["_affiliation_ok"] = True
+    elif qtype == "email":
+        if answer.strip():
+            s["analysis"]["contact_email"] = answer.strip()
+        s["answers"]["_email_ok"] = True
     elif qtype in ("title_confirm", "title_correct"):
         if qtype == "title_confirm" and not answer.lower().startswith("y"):
             s["_last_qtype"] = "title_correct"
@@ -306,9 +364,10 @@ def parse_paper_text(paper_text, analysis, session_id):
 
     authors = analysis.get("authors") or ["Author A", "Author B"]
     affiliation = analysis.get("affiliation") or analysis.get("domain") or "Engineering"
+    contact_email = analysis.get("contact_email", "")
     authors_data = []
     for i, author in enumerate(authors):
-        authors_data.append({"name": author, "affiliation": affiliation})
+        authors_data.append({"name": author, "affiliation": affiliation, "email": contact_email})
 
     refs = []
     for sec in other_sections[:]:
@@ -380,14 +439,34 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     abstract = re.sub(r'<[^>]+>', '', abstract)
     keywords = re.sub(r'<[^>]+>', '', keywords)
 
+    # Authors (name, affiliation, email)
+    author_blocks = re.findall(r'<div class="author">(.*?)</div>', html_content, re.DOTALL)
+    authors = []
+    for ab in author_blocks:
+        name = re.sub(r'<[^>]+>', '', re.split(r'<br>', ab)[0]).strip()
+        affil = re.sub(r'<[^>]+>', '', extract_section(r'class="affil">(.*?)</span>', ab)).strip()
+        email = re.sub(r'<[^>]+>', '', extract_section(r'class="email">(.*?)</span>', ab)).strip()
+        if name:
+            authors.append((name, affil, email))
+
     sections_raw = re.findall(r'<h2>(.*?)</h2>(.*?)(?=<h2>|<div class="references"|$)', html_content, re.DOTALL)
     sections = []
     for t, body in sections_raw:
         t_clean = re.sub(r'<[^>]+>', '', t).strip()
         ps = re.findall(r'<p>(.*?)</p>', body, re.DOTALL)
         content = '\n\n'.join(re.sub(r'<[^>]+>', '', p).strip().replace('<br>', '\n') for p in ps if p.strip())
-        if t_clean and content:
-            sections.append((t_clean, content))
+        tables = []
+        for tbl in re.findall(r'<table class="ieee-table">(.*?)</table>', body, re.DOTALL):
+            heads = [re.sub(r'<[^>]+>', '', h).strip() for h in re.findall(r'<th class="tablehead">(.*?)</th>', tbl)]
+            rows = []
+            for tr in re.findall(r'<tr>(.*?)</tr>', tbl, re.DOTALL):
+                cells = [re.sub(r'<[^>]+>', '', c).strip() for c in re.findall(r'<td class="tabletext">(.*?)</td>', tr)]
+                if cells:
+                    rows.append(cells)
+            if heads or rows:
+                tables.append((heads, rows))
+        if t_clean and (content or tables):
+            sections.append((t_clean, content, tables))
 
     def ascii_safe(t):
         t = t.replace('\u2014', '--').replace('\u2013', '-')
@@ -396,10 +475,11 @@ def generate_pdf_from_html(html_content: str) -> bytes:
         t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
         t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
         return t.encode('ascii', 'replace').decode('ascii')
-    sections = [(ascii_safe(t), ascii_safe(c)) for t, c in sections]
+    sections = [(ascii_safe(t), ascii_safe(c), tables) for t, c, tables in sections]
     title = ascii_safe(title)
     abstract = ascii_safe(abstract)
     keywords = ascii_safe(keywords)
+    authors = [(ascii_safe(n), ascii_safe(a), ascii_safe(e)) for n, a, e in authors]
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=18)
@@ -411,18 +491,28 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     pdf.set_font("Times", "B", 20)
     pdf.multi_cell(cw, 9, title, align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
+    for name, affil, email in authors:
+        pdf.set_font("Times", "", 12)
+        pdf.multi_cell(cw, 6, name, align="C", new_x="LMARGIN", new_y="NEXT")
+        if affil:
+            pdf.set_font("Times", "I", 10)
+            pdf.multi_cell(cw, 5, affil, align="C", new_x="LMARGIN", new_y="NEXT")
+        if email:
+            pdf.set_font("Times", "", 10)
+            pdf.multi_cell(cw, 5, email, align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
     if abstract:
         pdf.set_font("Times", "I", 10)
-        pdf.multi_cell(cw, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(cw, 5, f"Abstract - {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
     if keywords:
         pdf.set_font("Times", "I", 10)
-        pdf.multi_cell(cw, 5, f"Index Terms -- {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(cw, 5, f"Index Terms - {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
-    for sec_title, sec_content in sections:
+    for sec_title, sec_content, tables in sections:
         pdf.set_font("Times", "B", 12)
-        pdf.multi_cell(cw, 6, sec_title, align="L", new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(cw, 6, sec_title, align="C", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
 
         for para in sec_content.split('\n'):
@@ -431,6 +521,17 @@ def generate_pdf_from_html(html_content: str) -> bytes:
                 continue
             pdf.set_font("Times", "", 10)
             pdf.multi_cell(cw, 5, para, align="J", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1)
+
+        for heads, rows in tables:
+            pdf.ln(1)
+            pdf.set_font("Times", "B", 9)
+            header_line = " | ".join(heads) if heads else ""
+            if header_line:
+                pdf.multi_cell(cw, 5, header_line, align="L", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Times", "", 9)
+            for r in rows:
+                pdf.multi_cell(cw, 5, " | ".join(r), align="L", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(1)
 
     return bytes(pdf.output())
