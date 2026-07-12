@@ -54,6 +54,14 @@ export default function PaperWizard({ onNewSession }) {
   const chatEnd = useRef(null);
   const fileRef = useRef(null);
 
+  const [editMode, setEditMode] = useState(false);
+  const [editable, setEditable] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [aiEditInput, setAiEditInput] = useState('');
+  const [aiEditing, setAiEditing] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [editError, setEditError] = useState('');
+
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, aiTyping]);
 
   const goStep = useCallback((s) => {
@@ -195,6 +203,61 @@ export default function PaperWizard({ onNewSession }) {
   };
 
   const handleReset = () => { onNewSession(); };
+
+  const enterEdit = () => {
+    const pj = result.paper_json || {};
+    setEditable({
+      title: pj.title || '',
+      authors: (pj.authors || []).map(a => ({ name: a.name || '', affiliation: a.affiliation || '', email: a.email || '' })),
+      abstract: pj.abstract || '',
+      keywords: Array.isArray(pj.keywords) ? pj.keywords.join(', ') : (pj.keywords || ''),
+      sections: (pj.sections || []).map(s => ({ title: s.title || '', content: s.content || '' })),
+      references: (pj.references || []).map(r => (typeof r === 'string' ? r : (r.citation || ''))),
+    });
+    setEditError('');
+    setEditMode(true);
+  };
+
+  const updateEditable = (patch) => setEditable(prev => ({ ...prev, ...patch }));
+
+  const updateAuthor = (i, patch) => setEditable(prev => ({
+    ...prev,
+    authors: prev.authors.map((a, j) => (j === i ? { ...a, ...patch } : a)),
+  }));
+
+  const updateSection = (i, patch) => setEditable(prev => ({
+    ...prev,
+    sections: prev.sections.map((s, j) => (j === i ? { ...s, ...patch } : s)),
+  }));
+
+  const updateReference = (i, value) => setEditable(prev => ({
+    ...prev,
+    references: prev.references.map((r, j) => (j === i ? value : r)),
+  }));
+
+  const handleSave = async () => {
+    setSaving(true); setEditError('');
+    try {
+      const data = await apiService.savePaper(sessionId, editable);
+      setResult(prev => ({ ...prev, html_content: data.html_content, paper_json: data.paper_json }));
+      setEditMode(false);
+      setPreviewKey(k => k + 1);
+    } catch (e) { setEditError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleAiEdit = async () => {
+    if (!aiEditInput.trim()) return;
+    setAiEditing(true); setEditError('');
+    try {
+      const data = await apiService.editPaper(sessionId, aiEditInput);
+      setResult(data);
+      setEditMode(false);
+      setPreviewKey(k => k + 1);
+      setAiEditInput('');
+    } catch (e) { setEditError(e.message); }
+    finally { setAiEditing(false); }
+  };
 
   return (
     <div className="flex flex-1 min-h-0 p-3 md:p-4 gap-3 md:gap-6">
@@ -521,6 +584,16 @@ export default function PaperWizard({ onNewSession }) {
                   Paper generated <span className="text-accent-teal">✓</span>
                 </h2>
                 <div className="flex flex-wrap gap-2">
+                  {!editMode && (
+                    <button onClick={enterEdit}
+                      className="rounded-full text-sm font-medium px-4 py-1.5 transition-all active:scale-[0.95] inline-flex items-center gap-1.5 border border-surface-dark-elevated text-muted hover:border-on-dark-soft hover:text-white">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                      Edit Document
+                    </button>
+                  )}
                   <a href={apiService.getDownloadUrl(sessionId, "pdf")}
                     className="rounded-full text-sm font-medium px-4 py-1.5 transition-all active:scale-[0.95] inline-flex items-center gap-1.5 bg-primary text-white"
                     download={result.filename_html.replace('.html', '.pdf')}>
@@ -539,12 +612,108 @@ export default function PaperWizard({ onNewSession }) {
                   </a>
                 </div>
               </div>
-              <div className="flex-1 min-h-0">
-                <iframe
-                  src={apiService.getDownloadUrl(sessionId, "pdf")}
-                  className="w-full h-full border-0"
-                  title="PDF Preview"
-                />
+
+              {editMode && editable ? (
+                <div className="flex-1 min-h-0 overflow-y-auto p-5 md:p-8 space-y-6">
+                  <div>
+                    <p className="text-xs font-mono uppercase mb-1.5 text-muted">Title</p>
+                    <input className="w-full rounded-xl px-4 py-2.5 text-sm outline-none bg-surface-dark-elevated text-on-dark border border-transparent focus:border-primary"
+                      value={editable.title} onChange={e => updateEditable({ title: e.target.value })} />
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-mono uppercase mb-2 text-muted">Authors</p>
+                    <div className="space-y-2">
+                      {editable.authors.map((a, i) => (
+                        <div key={i} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <input className="rounded-xl px-3 py-2 text-sm outline-none bg-surface-dark-elevated text-on-dark border border-transparent focus:border-primary" placeholder="Name"
+                            value={a.name} onChange={e => updateAuthor(i, { name: e.target.value })} />
+                          <input className="rounded-xl px-3 py-2 text-sm outline-none bg-surface-dark-elevated text-on-dark border border-transparent focus:border-primary" placeholder="Affiliation"
+                            value={a.affiliation} onChange={e => updateAuthor(i, { affiliation: e.target.value })} />
+                          <input className="rounded-xl px-3 py-2 text-sm outline-none bg-surface-dark-elevated text-on-dark border border-transparent focus:border-primary" placeholder="Email"
+                            value={a.email} onChange={e => updateAuthor(i, { email: e.target.value })} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-mono uppercase mb-1.5 text-muted">Abstract</p>
+                    <textarea className="w-full rounded-xl px-4 py-3 text-sm outline-none bg-surface-dark-elevated text-on-dark border border-transparent focus:border-primary resize-y min-h-[90px]"
+                      value={editable.abstract} onChange={e => updateEditable({ abstract: e.target.value })} />
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-mono uppercase mb-1.5 text-muted">Index Terms (comma separated)</p>
+                    <input className="w-full rounded-xl px-4 py-2.5 text-sm outline-none bg-surface-dark-elevated text-on-dark border border-transparent focus:border-primary"
+                      value={editable.keywords} onChange={e => updateEditable({ keywords: e.target.value })} />
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-mono uppercase mb-2 text-muted">Sections</p>
+                    <div className="space-y-4">
+                      {editable.sections.map((s, i) => (
+                        <div key={i} className="rounded-xl p-4 border border-surface-dark-elevated">
+                          <input className="w-full rounded-lg px-3 py-2 text-sm font-medium outline-none bg-surface-dark text-on-dark border border-transparent focus:border-primary mb-2"
+                            value={s.title} onChange={e => updateSection(i, { title: e.target.value })} />
+                          <textarea className="w-full rounded-lg px-3 py-2 text-sm outline-none bg-surface-dark text-on-dark border border-transparent focus:border-primary resize-y min-h-[100px]"
+                            value={s.content} onChange={e => updateSection(i, { content: e.target.value })} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-mono uppercase mb-2 text-muted">References</p>
+                    <div className="space-y-2">
+                      {editable.references.map((r, i) => (
+                        <textarea key={i} className="w-full rounded-xl px-3 py-2 text-sm outline-none bg-surface-dark-elevated text-on-dark border border-transparent focus:border-primary resize-y min-h-[48px]"
+                          value={r} onChange={e => updateReference(i, e.target.value)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {editError && (
+                    <div className="rounded-xl p-3 text-sm border" style={{ backgroundColor: '#fdf0ef', borderColor: '#e8b4b4', color: '#c64545' }}>{editError}</div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={handleSave} disabled={saving}
+                      className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95] disabled:opacity-40">
+                      {saving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                    <button onClick={() => setEditMode(false)} disabled={saving}
+                      className="rounded-full text-sm font-medium px-5 py-2.5 border border-surface-dark-elevated text-muted hover:text-white transition-all active:scale-[0.95] disabled:opacity-40">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0">
+                  <iframe
+                    key={previewKey}
+                    src={apiService.getDownloadUrl(sessionId, "pdf")}
+                    className="w-full h-full border-0"
+                    title="PDF Preview"
+                  />
+                </div>
+              )}
+
+              <div className="px-5 md:px-8 py-4 border-t border-surface-dark-elevated shrink-0 bg-surface-dark">
+                <p className="text-xs font-mono uppercase mb-2 text-muted">Ask AI to edit</p>
+                <div className="flex gap-2">
+                  <input className="flex-1 rounded-full px-5 py-2.5 text-sm outline-none border transition-all duration-200 bg-surface-dark-elevated text-on-dark border-transparent focus:border-primary"
+                    placeholder="e.g. Shorten the abstract, add a Limitations section, make the conclusion stronger"
+                    value={aiEditInput} onChange={e => setAiEditInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAiEdit()} />
+                  <button onClick={handleAiEdit} disabled={aiEditing || !aiEditInput.trim()}
+                    className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95] disabled:opacity-40 inline-flex items-center gap-1.5">
+                    {aiEditing ? <>Editing<TypingDots /></> : 'Apply'}
+                  </button>
+                </div>
+                {editError && !editMode && (
+                  <div className="mt-2 rounded-xl p-3 text-sm border" style={{ backgroundColor: '#fdf0ef', borderColor: '#e8b4b4', color: '#c64545' }}>{editError}</div>
+                )}
               </div>
             </div>
           )}

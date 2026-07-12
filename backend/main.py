@@ -6,7 +6,7 @@ import os, re, uuid, tempfile, json
 import PyPDF2
 from docx import Document
 from config import MAX_FILE_SIZE, UPLOAD_DIR
-from services.llm_service import analyze_document, generate_question, check_answer_clear, generate_paper_stream
+from services.llm_service import analyze_document, generate_question, check_answer_clear, generate_paper_stream, edit_paper
 
 app = FastAPI(title="Research Paper Generator")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -404,12 +404,21 @@ def parse_paper_text(paper_text, analysis, session_id):
         domain=analysis.get("domain", "Technology"),
         references=refs
     )
+    paper_json = {
+        "title": analysis.get("title", "Research Paper"),
+        "authors": authors_data,
+        "abstract": abstract_section or abstract or "",
+        "keywords": analysis.get("keywords", [analysis.get("domain", "Technology")]),
+        "sections": other_sections,
+        "references": [r["citation"] for r in refs],
+    }
     base_name = analysis.get('title', 'paper').replace(' ', '_')
     return {
         "paper_text": paper_text,
         "html_content": html_content,
         "download_html": f"/api/download/{session_id}/html",
-        "filename_html": f"{base_name}.html"
+        "filename_html": f"{base_name}.html",
+        "paper_json": paper_json,
     }
 
 @app.get("/api/generate-stream/{session_id}")
@@ -619,6 +628,72 @@ def generate_pdf_from_html(html_content: str) -> bytes:
             state["y"] += 2
 
     return bytes(pdf.output())
+
+def build_markdown(title, abstract, sections, keywords, refs):
+    parts = [f"## Abstract\n{abstract}"]
+    for sec in sections:
+        parts.append(f"## {sec.get('title', '')}\n{sec.get('content', '')}")
+    ref_lines = ["## References"]
+    for i, r in enumerate(refs, 1):
+        r = (r or "").strip()
+        ref_lines.append(r if r.startswith("[") else f"[{i}] {r}")
+    return "\n\n".join(parts + ref_lines)
+
+
+@app.post("/api/save/{session_id}")
+async def save_paper(session_id: str, data: dict):
+    s = sessions.get(session_id)
+    if not s:
+        raise HTTPException(404, "Session not found")
+    pj = data.get("paper_json", {})
+    title = pj.get("title", s["analysis"].get("title", "Research Paper"))
+    authors = [
+        {"name": a.get("name", ""), "affiliation": a.get("affiliation", ""), "email": a.get("email", "")}
+        for a in pj.get("authors", [])
+    ]
+    abstract = pj.get("abstract", "")
+    kw = pj.get("keywords", [])
+    if isinstance(kw, str):
+        kw = [k.strip() for k in kw.split(",") if k.strip()]
+    sections = [{"title": sec.get("title", ""), "content": sec.get("content", "")} for sec in pj.get("sections", [])]
+    refs = [{"citation": r} for r in pj.get("references", [])]
+    html = generate_ieee_html(title, authors, abstract, sections, kw, s["analysis"].get("domain", "Technology"), refs)
+    paper_text = build_markdown(title, abstract, sections, kw, [r["citation"] for r in refs])
+    pj["title"] = title
+    s["html_content"] = html
+    s["paper_text"] = paper_text
+    s["paper_json"] = pj
+    s["analysis"]["title"] = title
+    s["analysis"]["authors"] = authors
+    s["analysis"]["keywords"] = kw
+    base = title.replace(' ', '_')
+    return {
+        "paper_text": paper_text,
+        "html_content": html,
+        "download_html": f"/api/download/{session_id}/html",
+        "filename_html": f"{base}.html",
+        "paper_json": pj,
+    }
+
+
+@app.post("/api/edit/{session_id}")
+async def edit_paper_endpoint(session_id: str, data: dict):
+    s = sessions.get(session_id)
+    if not s:
+        raise HTTPException(404, "Session not found")
+    instruction = (data.get("instruction") or "").strip()
+    if not instruction:
+        raise HTTPException(400, "No instruction provided")
+    current = s.get("paper_text") or ""
+    if not current:
+        raise HTTPException(400, "No paper to edit yet")
+    edited = edit_paper(current, instruction)
+    s["paper_text"] = edited
+    result = parse_paper_text(edited, s["analysis"], session_id)
+    s["html_content"] = result["html_content"]
+    s["paper_json"] = result.get("paper_json")
+    return result
+
 
 @app.get("/api/download/{session_id}/{fmt}")
 async def download(session_id: str, fmt: str):

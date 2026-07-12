@@ -179,6 +179,26 @@ If unclear (rare): {{"clear": false, "follow_up": "A simple clarifying question 
         {"role": "user", "content": prompt}
     ])
 
+
+def edit_paper(paper_text: str, instruction: str) -> str:
+    prompt = f"""You are editing an IEEE-format research paper based on the user's instruction.
+
+CURRENT PAPER:
+{paper_text}
+
+INSTRUCTION: {instruction}
+
+Rewrite the COMPLETE paper applying the instruction. Strictly preserve the existing ##-prefixed section structure of the CURRENT PAPER — only include the sections that are already present, in their current order. Do NOT invent or add new sections (such as Literature Review, Methodology, Results, Limitations, or About the Authors) unless the instruction explicitly asks for them. Preserve all unchanged content verbatim. Do NOT invent numerical results, statistics, or metrics not already present. Never include reasoning, chain-of-thought, or commentary — output only the revised paper."""
+    messages = [
+        {"role": "system", "content": "You edit IEEE-format research papers using only ##-prefixed section headings. Output only the paper, never reasoning or commentary. Never add sections that aren't in the current paper."},
+        {"role": "user", "content": prompt}
+    ]
+    text = call_llm(messages, temperature=0.4, max_tokens=16384)
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
+    return text.strip()
+
 def generate_paper_stream(file_text: str, answers: dict, analysis: dict):
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items()]) if answers else ""
 

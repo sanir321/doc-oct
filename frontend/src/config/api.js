@@ -29,4 +29,24 @@ export const apiService = {
     return `${BASE}/api/download/${sessionId}/${fmt}`;
   },
 
+  async savePaper(sessionId, paperJson) {
+    const res = await fetch(`${BASE}/api/save/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paper_json: paperJson }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail);
+    return res.json();
+  },
+
+  async editPaper(sessionId, instruction) {
+    const res = await fetch(`${BASE}/api/edit/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail);
+    return res.json();
+  },
+
 };
