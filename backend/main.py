@@ -403,8 +403,14 @@ async def download(session_id: str, fmt: str):
         abstract = re.sub(r'<[^>]+>', '', abstract)
         keywords = re.sub(r'<[^>]+>', '', keywords)
 
-        sections_raw = re.findall(r'<h2>(.*?)</h2>\s*<p>(.*?)</p>', html, re.DOTALL)
-        sections = [(re.sub(r'<[^>]+>', '', t).strip(), re.sub(r'<[^>]+>', '', c).strip().replace('<br>', '\n')) for t, c in sections_raw]
+        sections_raw = re.findall(r'<h2>(.*?)</h2>(.*?)(?=<h2>|<div class="references"|$)', html, re.DOTALL)
+        sections = []
+        for t, body in sections_raw:
+            t_clean = re.sub(r'<[^>]+>', '', t).strip()
+            ps = re.findall(r'<p>(.*?)</p>', body, re.DOTALL)
+            content = '\n\n'.join(re.sub(r'<[^>]+>', '', p).strip().replace('<br>', '\n') for p in ps if p.strip())
+            if t_clean and content:
+                sections.append((t_clean, content))
 
         def ascii_safe(t):
             t = t.replace('\u2014', '--').replace('\u2013', '-')
@@ -413,6 +419,7 @@ async def download(session_id: str, fmt: str):
             t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
             t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
             return t.encode('ascii', 'replace').decode('ascii')
+        sections = [(ascii_safe(t), ascii_safe(c)) for t, c in sections]
         title = ascii_safe(title)
         abstract = ascii_safe(abstract)
         keywords = ascii_safe(keywords)
@@ -429,11 +436,11 @@ async def download(session_id: str, fmt: str):
         pdf.ln(3)
         if abstract:
             pdf.set_font("Times", "I", 10)
-            pdf.multi_cell(cw, 5, f"Abstract\u2014{abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+            pdf.multi_cell(cw, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(2)
         if keywords:
             pdf.set_font("Times", "I", 10)
-            pdf.multi_cell(cw, 5, f"Index Terms\u2014{keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
+            pdf.multi_cell(cw, 5, f"Index Terms -- {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(4)
 
         for sec_title, sec_content in sections:
