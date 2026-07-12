@@ -29,7 +29,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Set `GROQ_API_KEY` in your environment or `config.py`.
+Set `OPENCODE_ZEN_API_KEY` in your environment or `backend/config.py`.
 
 ## Tech Stack
 
