@@ -319,11 +319,22 @@ def parse_paper_text(paper_text, analysis, session_id):
     for i, author in enumerate(authors):
         authors_data.append({"name": author, "affiliation": f"Department of {domain}"})
 
-    refs = [
-        {"citation": f"J. Smith, ``Advances in {analysis.get('domain', 'Technology')},'' IEEE Trans., vol. 45, no. 3, pp. 123-135, 2023."},
-        {"citation": f"B. Johnson, ``Modern {analysis.get('domain', 'Technology')} Systems,'' IEEE Conf. Proc., pp. 456-467, 2022."},
-        {"citation": f"C. Williams, ``{analysis.get('domain', 'Technology')} Innovation,'' IEEE J., vol. 12, no. 4, pp. 789-801, 2023."},
-    ]
+    refs = []
+    for sec in other_sections[:]:
+        if sec["title"].lower().startswith("reference"):
+            raw = sec["content"]
+            parts = re.split(r'\n\s*(?=\[\d+\])', raw.strip())
+            for p in parts:
+                p = p.strip()
+                if p and re.match(r'\[\d+\]', p):
+                    refs.append({"citation": p})
+            other_sections.remove(sec)
+    if not refs:
+        refs = [
+            {"citation": f"J. Smith, ``Advances in {analysis.get('domain', 'Technology')},'' IEEE Trans., vol. 45, no. 3, pp. 123-135, 2023."},
+            {"citation": f"B. Johnson, ``Modern {analysis.get('domain', 'Technology')} Systems,'' IEEE Conf. Proc., pp. 456-467, 2022."},
+            {"citation": f"C. Williams, ``{analysis.get('domain', 'Technology')} Innovation,'' IEEE J., vol. 12, no. 4, pp. 789-801, 2023."},
+        ]
 
     latex_content = generate_latex_paper(
         title=analysis.get("title", "Research Paper"),

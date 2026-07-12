@@ -121,7 +121,7 @@ def generate_paper_stream(file_text: str, answers: dict, analysis: dict):
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items()]) if answers else ""
     prompt = f"""Write a focused position paper comparing three transformer model variants — BERT, Longformer, and BigBird — on two tasks: (1) standard-length text classification, and (2) long-document understanding.
 
-Ground every claim in the document context below. Do NOT invent any numerical results, paper counts, statistics, metrics, or citations not present in the document.
+Ground every claim in the document context below. You may invent plausible references (author, title, venue, year) for a realistic bibliography — these are illustrative for a position paper. Do NOT invent any numerical results, paper counts, statistics, or specific metrics not present in the document.
 
 Structure the paper with these ##-prefixed sections in order:
 - ## Abstract
@@ -131,18 +131,20 @@ Structure the paper with these ##-prefixed sections in order:
 - ## Task 2: Long-Document Understanding
 - ## Discussion
 - ## Conclusion
+- ## References
 
 Rules:
 - Start with ## Abstract (one paragraph summarising the comparison and key architectural trade-offs).
 - Each ## section should be 2–4 paragraphs of focused analysis.
 - Compare design choices, attention mechanisms, and computational trade-offs — do NOT report fabricated numbers.
 - Never include reasoning, chain-of-thought, thinking blocks, or meta-commentary. Output only the paper content.
+- The ## References section must contain at least 5 IEEE-formatted references like: [1] J. Smith, "Title," Journal Name, vol. X, no. Y, pp. Z-Z, year.
 
 Document context: {file_text[:12000]}
 
 Author details: {answers_text}"""
     messages = [
-        {"role": "system", "content": "You are a position paper writer specialising in comparative analysis of transformer architectures. You write focused discussions that compare design trade-offs using only provided source material. You never fabricate numerical results, paper counts, or statistics. Your output uses only ##-prefixed headings and contains no reasoning or chain-of-thought."},
+        {"role": "system", "content": "You are a position paper writer specialising in comparative analysis of transformer architectures. You write focused discussions that compare design trade-offs using only provided source material. You may generate plausible illustrative references for the bibliography. You never fabricate numerical results, paper counts, or statistics. Your output uses only ##-prefixed headings and contains no reasoning or chain-of-thought."},
         {"role": "user", "content": prompt}
     ]
     with httpx.Client(timeout=300) as client:
