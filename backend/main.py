@@ -174,7 +174,31 @@ async def submit_answer(session_id: str, data: dict):
 
     return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", "")}
 
+def strip_reasoning(text):
+    lines = text.split("\n")
+    first_section_idx = -1
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        for prefix in ["# ", "## ", "### "]:
+            if stripped.startswith(prefix):
+                first_section_idx = i
+                break
+        if first_section_idx >= 0:
+            break
+        for sec in ["Abstract", "Introduction", "Literature", "Related Work", "Methodology",
+                     "System Design", "Implementation", "Experimental", "Results", "Discussion",
+                     "Conclusion", "Future Work", "References"]:
+            if stripped.lower().startswith(sec.lower()) and (stripped.endswith(":") or len(stripped) < len(sec) + 5):
+                first_section_idx = i
+                break
+        if first_section_idx >= 0:
+            break
+    if first_section_idx > 0:
+        text = "\n".join(lines[first_section_idx:])
+    return text
+
 def parse_paper_text(paper_text, analysis, session_id):
+    paper_text = strip_reasoning(paper_text)
     sections = []
     abstract = ""
     current_title = None

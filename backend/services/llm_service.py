@@ -92,34 +92,11 @@ Uploaded document context:
 Additional details from author:
 {answers_text}
 
-Output ONLY the paper content. Start directly with:
-## Abstract
-...abstract content...
+Write the full paper content with ## section headings. Include: Abstract, Introduction, Literature Review, Methodology, Implementation, Results & Discussion, Conclusion, References.
 
-## Introduction
-...content...
-
-## Literature Review
-...content...
-
-## Methodology
-...content...
-
-## Implementation
-...content...
-
-## Results & Discussion
-...content...
-
-## Conclusion
-...content...
-
-## References
-...references...
-
-IMPORTANT: Use ONLY the facts from the uploaded document and author answers. Do not invent technical details that aren't supported."""
+IMPORTANT: Use ONLY the facts from the uploaded document and author answers."""
     messages = [
-        {"role": "system", "content": "You are an IEEE research paper generator. Output ONLY the paper sections with ## headings. No thinking, no reasoning, no chain-of-thought. Start directly with ## Abstract."},
+        {"role": "system", "content": "You are an IEEE research paper generator. Write the paper directly with ## section headings."},
         {"role": "user", "content": prompt}
     ]
     with httpx.Client(timeout=300) as client:
