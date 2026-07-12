@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { apiService } from '../config/api';
+import { apiService, BASE } from '../config/api';
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
@@ -31,15 +31,14 @@ function TypingDots() {
 
 function CoralButton({ children, outline, danger, dark, onClick, disabled, small, className = '' }) {
   const size = small ? 'text-xs px-3 py-1.5' : 'text-sm px-5 py-2.5';
-  const dis = disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer';
   let style;
-  if (disabled) style = 'bg-hairline text-muted-soft';
-  else if (danger) style = 'bg-error text-white';
-  else if (outline) style = 'bg-transparent text-body border border-hairline';
-  else if (dark) style = 'bg-transparent text-on-dark-soft border border-surface-dark-elevated hover:text-white hover:border-on-dark-soft';
-  else style = 'bg-primary text-white';
+  if (disabled) style = 'bg-hairline text-muted-soft opacity-40 cursor-not-allowed';
+  else if (danger) style = 'bg-error text-white cursor-pointer';
+  else if (outline) style = 'bg-transparent text-body border border-hairline cursor-pointer';
+  else if (dark) style = 'bg-transparent text-on-dark-soft border border-surface-dark-elevated hover:text-white hover:border-on-dark-soft cursor-pointer';
+  else style = 'bg-primary text-white cursor-pointer';
   return (
-    <button className={`rounded-full font-medium transition-all active:scale-[0.95] ${style} ${size} ${dis} ${className}`}
+    <button className={`rounded-full font-medium transition-all active:scale-[0.95] ${style} ${size} ${className}`}
       onClick={onClick} disabled={disabled}>{children}</button>
   );
 }
@@ -204,22 +203,12 @@ export default function PaperWizard({ onNewSession }) {
 
   const handleDragOver = (e) => { e.preventDefault(); setDragOver(true); };
   const handleDragLeave = () => setDragOver(false);
-  const handleDrop = (e) => {
-    e.preventDefault(); setDragOver(false);
-    const dropped = Array.from(e.dataTransfer.files);
-    setFiles(prev => {
-      const existing = new Set(prev.map(f => f.name + f.lastModified));
-      return [...prev, ...dropped.filter(f => !existing.has(f.name + f.lastModified))];
-    });
-  };
-
-  const handleFileSelect = (e) => {
-    const selected = Array.from(e.target.files);
-    setFiles(prev => {
-      const existing = new Set(prev.map(f => f.name + f.lastModified));
-      return [...prev, ...selected.filter(f => !existing.has(f.name + f.lastModified))];
-    });
-  };
+  const mergeFiles = (incoming) => setFiles(prev => {
+    const existing = new Set(prev.map(f => f.name + f.lastModified));
+    return [...prev, ...incoming.filter(f => !existing.has(f.name + f.lastModified))];
+  });
+  const handleDrop = (e) => { e.preventDefault(); setDragOver(false); mergeFiles(Array.from(e.dataTransfer.files)); };
+  const handleFileSelect = (e) => mergeFiles(Array.from(e.target.files));
 
   const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
 
@@ -341,7 +330,6 @@ export default function PaperWizard({ onNewSession }) {
     setGenerating(true); setError('');
     setLivePaper('');
     streamDone.current = false;
-    const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
     const es = new EventSource(`${BASE}/api/generate-stream/${sessionId}`);
     es.onmessage = (evt) => {
       try {

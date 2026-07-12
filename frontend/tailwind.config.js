@@ -3,11 +3,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          DEFAULT: '#cc785c',
-          active: '#a9583e',
-          disabled: '#e6dfd8',
-        },
+        primary: '#cc785c',
         ink: '#141413',
         body: '#3d3d3a',
         muted: '#6c6a64',

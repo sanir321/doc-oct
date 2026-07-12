@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 import uvicorn
 import os, re, uuid, tempfile, json
-from pathlib import Path
 import PyPDF2
 from docx import Document
 from config import MAX_FILE_SIZE, UPLOAD_DIR
@@ -93,7 +92,7 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
 </body></html>"""
 
 def extract_text(file_path: str, filename: str) -> str:
-    ext = Path(filename).suffix.lower()
+    ext = os.path.splitext(filename)[1].lower()
     if ext == '.pdf':
         text = ""
         with open(file_path, 'rb') as f:
@@ -106,7 +105,6 @@ def extract_text(file_path: str, filename: str) -> str:
             text += para.text + "\n"
         return text
     elif ext == '.ipynb':
-        import json
         with open(file_path, 'r', encoding='utf-8') as f:
             nb = json.load(f)
         text = ""
@@ -240,61 +238,40 @@ async def submit_answer(session_id: str, data: dict):
 
 def strip_reasoning(text):
     lines = text.split("\n")
-    first_section_idx = -1
-
-    roman_numerals = [
-        "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
-        "XI", "XII", "XIII", "XIV", "XV"
-    ]
-
     for i, line in enumerate(lines):
-        stripped = line.strip()
-
-        # 1) Markdown headings: #, ##, ### with or without space after the hashes
-        m = re.match(r'^(#{1,3})(\s*)(.*)', stripped)
-        if m:
-            hashes = m.group(1)
-            spacing = m.group(2)
-            rest = m.group(3)
-            # Accept: # Title, ## Title, ### Title, ##Title, ###Title
-            # Also accept bare heading markers like "##" alone on a line
-            if spacing or not rest or len(hashes) >= 2:
-                first_section_idx = i
-                break
-
-        # 2) Known section names (with or without markdown prefix stripped)
-        for sec in ["Abstract", "Introduction", "Literature", "Related Work", "Methodology",
-                     "System Design", "Implementation", "Experimental", "Results", "Discussion",
-                     "Conclusion", "Future Work", "References"]:
-            # Strip any leading # markers first, then check
-            clean = re.sub(r'^#+\s*', '', stripped)
-            if clean.lower().startswith(sec.lower()) and (clean.endswith(":") or len(clean) < len(sec) + 5):
-                first_section_idx = i
-                break
-        if first_section_idx >= 0:
-            break
-
-        # 3) Roman numeral headings: "I. Introduction", "## I. Introduction", "II.", etc.
-        rn_match = re.match(r'^(?:#+\s*)?(([IVXLCDM]+))\.(\s|$)', stripped)
-        if rn_match:
-            candidate = rn_match.group(1)
-            # Validate it is a well-formed Roman numeral (not random caps)
-            if re.match(
-                r'^(?:(?:M{1,3})?(?:CM|CD|D?C{0,3})?(?:XC|XL|L?X{0,3})?(?:IX|IV|V?I{0,3}))$',
-                candidate
-            ) and candidate in roman_numerals:
-                first_section_idx = i
-                break
-
-        # 4) Numbered headings: "1. Introduction", "## 1. Introduction", "12.", etc.
-        num_match = re.match(r'^(?:#+\s*)?(\d+)\.(\s|$)', stripped)
-        if num_match:
-            first_section_idx = i
-            break
-
-    if first_section_idx > 0:
-        text = "\n".join(lines[first_section_idx:])
+        if _heading_text(line):
+            return "\n".join(lines[i:])
     return text
+
+def _heading_text(line):
+    stripped = line.strip()
+    if not stripped or stripped.startswith("```") or stripped.startswith("==="):
+        return None
+
+    roman_numerals = {"I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV"}
+
+    m = re.match(r'^(#{1,3})(\s*)(.*)', stripped)
+    if m and (m.group(2) or not m.group(3) or len(m.group(1)) >= 2):
+        return m.group(3).strip() or None
+
+    for prefix in ["Abstract","Introduction","Literature","Related Work","Methodology",
+                   "System Design","Implementation","Experimental","Results","Discussion",
+                   "Conclusion","Future Work","References"]:
+        clean = re.sub(r'^#+\s*', '', stripped)
+        if clean.lower().startswith(prefix.lower()) and (clean.endswith(":") or len(clean) < len(prefix) + 5):
+            return prefix
+
+    rn_match = re.match(r'^(?:#+\s*)?([IVXLCDM]+)\.(\s|$)', stripped)
+    if rn_match and rn_match.group(1) in roman_numerals:
+        after = stripped[rn_match.end():].strip()
+        return f"{rn_match.group(1)}. {after}" if after else f"{rn_match.group(1)}."
+
+    num_match = re.match(r'^(?:#+\s*)?(\d+)\.(\s|$)', stripped)
+    if num_match:
+        after = stripped[num_match.end():].strip()
+        return f"{num_match.group(1)}. {after}" if after else f"{num_match.group(1)}."
+
+    return None
 
 def parse_paper_text(paper_text, analysis, session_id):
     paper_text = strip_reasoning(paper_text)
@@ -303,82 +280,19 @@ def parse_paper_text(paper_text, analysis, session_id):
     current_title = None
     current_content = []
 
-    roman_numerals = [
-        "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
-        "XI", "XII", "XIII", "XIV", "XV"
-    ]
-
     for line in paper_text.split("\n"):
-        line_stripped = line.strip()
-        if line_stripped and not line_stripped.startswith("```") and not line_stripped.startswith("==="):
-            is_heading = False
-
-            # --- 1) Markdown headings: #, ##, ### with or without trailing space ---
-            m = re.match(r'^(#{1,3})(\s*)(.*)', line_stripped)
-            if m:
-                heading_text = m.group(3).strip()
-                if current_title:
-                    sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
-                else:
-                    abstract = "\n".join(current_content).strip()
-                current_title = heading_text
-                current_content = []
-                is_heading = True
-            if is_heading:
-                continue
-
-            # --- 2) Known section names (with or without leading # markers) ---
-            for prefix in ["Abstract", "Introduction", "Literature", "Related Work", "Methodology",
-                           "System Design", "Implementation", "Experimental", "Results", "Discussion",
-                           "Conclusion", "Future Work", "References"]:
-                clean = re.sub(r'^#+\s*', '', line_stripped)
-                if clean.lower().startswith(prefix.lower()) and (clean.endswith(":") or len(clean) < len(prefix) + 5):
-                    if current_title:
-                        sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
-                    else:
-                        abstract = "\n".join(current_content).strip()
-                    current_title = prefix
-                    current_content = []
-                    is_heading = True
-                    break
-            if is_heading:
-                continue
-
-            # --- 3) Roman numeral headings: "I. Introduction", "## II. Related Work", etc. ---
-            rn_match = re.match(r'^(?:#+\s*)?(([IVXLCDM]+))\.(\s|$)', line_stripped)
-            if rn_match:
-                candidate = rn_match.group(1)
-                if candidate in roman_numerals:
-                    # Extract heading text after the Roman numeral
-                    after_dot = line_stripped[rn_match.end():].strip()
-                    heading_text = f"{candidate}. {after_dot}" if after_dot else f"{candidate}."
-                    if current_title:
-                        sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
-                    else:
-                        abstract = "\n".join(current_content).strip()
-                    current_title = heading_text
-                    current_content = []
-                    is_heading = True
-            if is_heading:
-                continue
-
-            # --- 4) Numbered headings: "1. Introduction", "## 2. Related Work", etc. ---
-            num_match = re.match(r'^(?:#+\s*)?(\d+)\.(\s|$)', line_stripped)
-            if num_match:
-                after_dot = line_stripped[num_match.end():].strip()
-                heading_text = f"{num_match.group(1)}. {after_dot}" if after_dot else f"{num_match.group(1)}."
-                if current_title:
-                    sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
-                else:
-                    abstract = "\n".join(current_content).strip()
-                current_title = heading_text
-                current_content = []
-                is_heading = True
-            if is_heading:
-                continue
-
-            # Not a heading — append as content
-            current_content.append(line)
+        stripped = line.strip()
+        if not stripped or stripped.startswith("```") or stripped.startswith("==="):
+            continue
+        heading = _heading_text(line)
+        if heading:
+            content = "\n".join(current_content).strip()
+            if current_title:
+                sections.append({"title": current_title, "content": content})
+            else:
+                abstract = content
+            current_title = heading
+            current_content = []
         else:
             current_content.append(line)
 
@@ -478,7 +392,6 @@ async def download(session_id: str, fmt: str):
                         headers={"Content-Disposition": f"attachment; filename={base}.tex"})
     if fmt == "pdf" and s.get("html_content"):
         from fpdf import FPDF
-        import re
         html = s["html_content"]
 
         def extract_section(regex, html, group=1):
