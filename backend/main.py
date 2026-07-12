@@ -17,16 +17,41 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 sessions = {}
 
-def generate_ieee_html(title, authors, abstract, sections, keywords, domain):
-    authors_html = "".join(
-        f'<div class="author">{a["name"]}<br><span class="affil">{a["affiliation"]}</span></div>'
-        for a in authors
-    )
+def generate_ieee_html(title, authors, abstract, sections, keywords, domain, references=None):
+    # Build author HTML with per-affiliation superscript markers
+    authors_html = ""
+    if authors:
+        affil_map = {}
+        counter = 1
+        author_parts = []
+        for a in authors:
+            affil = a.get("affiliation", "")
+            if affil:
+                if affil not in affil_map:
+                    affil_map[affil] = counter
+                    counter += 1
+                sup = f'<sup>{affil_map[affil]}</sup>'
+            else:
+                sup = ""
+            author_parts.append(
+                f'<div class="author">{a["name"]}{sup}<br><span class="affil">{affil}</span></div>'
+            )
+        authors_html = "".join(author_parts)
+
     sections_html = "".join(
         f'<div class="section"><h2>{s["title"]}</h2><p>{s["content"].replace(chr(10), "<br>")}</p></div>'
         for s in sections
     )
     keywords_str = ", ".join(keywords)
+
+    # Build references HTML
+    refs_html = ""
+    if references:
+        ref_list = "\n".join(
+            f'<p>[{i}] {r["citation"]}</p>' for i, r in enumerate(references, 1)
+        )
+        refs_html = f'<div class="references"><h2>References</h2>\n{ref_list}\n</div>'
+
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <title>{title}</title>
@@ -39,6 +64,7 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain):
   .authors {{ text-align: center; font-size: 12pt; margin-bottom: 18px; font-family: "Times New Roman", Times, serif; }}
   .author {{ display: inline-block; margin: 0 16px; }}
   .affil {{ font-size: 10pt; font-style: italic; }}
+  sup {{ font-size: 8pt; vertical-align: super; line-height: 1; }}
   .abstract {{ margin: 12px 0; padding: 0; }}
   .abstract-label {{ font-size: 10pt; font-weight: bold; font-style: italic; }}
   .abstract p {{ font-size: 10pt; font-weight: bold; font-style: italic; text-align: justify; display: inline; }}
@@ -49,6 +75,8 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain):
   .section h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: left; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; letter-spacing: 0.5pt; }}
   .section h3 {{ font-size: 10pt; font-style: italic; font-weight: normal; text-align: left; margin: 9pt 0 3pt 0; font-family: "Times New Roman", Times, serif; }}
   .section p {{ text-align: justify; text-indent: 0.17in; margin-bottom: 0; line-height: 1.15; }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 9pt; margin: 8px 0; }}
+  th, td {{ border: 0.5pt solid black; padding: 3px 6px; text-align: center; }}
   .references {{ margin-top: 12px; }}
   .references h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: left; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; }}
   .references p {{ font-size: 9pt; margin-left: 0.25in; text-indent: -0.25in; line-height: 1.15; margin-bottom: 6pt; text-align: left; }}
@@ -60,6 +88,7 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain):
   <div class="abstract"><span class="abstract-label">Abstract — </span><p>{abstract}</p></div>
   <div class="keywords"><span class="kw-label">Index Terms — </span>{keywords_str}</div>
   <div class="content">{sections_html}</div>
+  {refs_html}
 </div>
 </body></html>"""
 
@@ -177,22 +206,57 @@ async def submit_answer(session_id: str, data: dict):
 def strip_reasoning(text):
     lines = text.split("\n")
     first_section_idx = -1
+
+    roman_numerals = [
+        "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+        "XI", "XII", "XIII", "XIV", "XV"
+    ]
+
     for i, line in enumerate(lines):
         stripped = line.strip()
-        for prefix in ["# ", "## ", "### "]:
-            if stripped.startswith(prefix):
+
+        # 1) Markdown headings: #, ##, ### with or without space after the hashes
+        m = re.match(r'^(#{1,3})(\s*)(.*)', stripped)
+        if m:
+            hashes = m.group(1)
+            spacing = m.group(2)
+            rest = m.group(3)
+            # Accept: # Title, ## Title, ### Title, ##Title, ###Title
+            # Also accept bare heading markers like "##" alone on a line
+            if spacing or not rest or len(hashes) >= 2:
                 first_section_idx = i
                 break
-        if first_section_idx >= 0:
-            break
+
+        # 2) Known section names (with or without markdown prefix stripped)
         for sec in ["Abstract", "Introduction", "Literature", "Related Work", "Methodology",
                      "System Design", "Implementation", "Experimental", "Results", "Discussion",
                      "Conclusion", "Future Work", "References"]:
-            if stripped.lower().startswith(sec.lower()) and (stripped.endswith(":") or len(stripped) < len(sec) + 5):
+            # Strip any leading # markers first, then check
+            clean = re.sub(r'^#+\s*', '', stripped)
+            if clean.lower().startswith(sec.lower()) and (clean.endswith(":") or len(clean) < len(sec) + 5):
                 first_section_idx = i
                 break
         if first_section_idx >= 0:
             break
+
+        # 3) Roman numeral headings: "I. Introduction", "## I. Introduction", "II.", etc.
+        rn_match = re.match(r'^(?:#+\s*)?(([IVXLCDM]+))\.(\s|$)', stripped)
+        if rn_match:
+            candidate = rn_match.group(1)
+            # Validate it is a well-formed Roman numeral (not random caps)
+            if re.match(
+                r'^(?:(?:M{1,3})?(?:CM|CD|D?C{0,3})?(?:XC|XL|L?X{0,3})?(?:IX|IV|V?I{0,3}))$',
+                candidate
+            ) and candidate in roman_numerals:
+                first_section_idx = i
+                break
+
+        # 4) Numbered headings: "1. Introduction", "## 1. Introduction", "12.", etc.
+        num_match = re.match(r'^(?:#+\s*)?(\d+)\.(\s|$)', stripped)
+        if num_match:
+            first_section_idx = i
+            break
+
     if first_section_idx > 0:
         text = "\n".join(lines[first_section_idx:])
     return text
@@ -204,13 +268,55 @@ def parse_paper_text(paper_text, analysis, session_id):
     current_title = None
     current_content = []
 
+    roman_numerals = [
+        "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+        "XI", "XII", "XIII", "XIV", "XV"
+    ]
+
     for line in paper_text.split("\n"):
         line_stripped = line.strip()
         if line_stripped and not line_stripped.startswith("```") and not line_stripped.startswith("==="):
             is_heading = False
-            for prefix in ["# ", "## ", "### "]:
-                if line_stripped.startswith(prefix):
-                    heading_text = line_stripped[len(prefix):].strip()
+
+            # --- 1) Markdown headings: #, ##, ### with or without trailing space ---
+            m = re.match(r'^(#{1,3})(\s*)(.*)', line_stripped)
+            if m:
+                heading_text = m.group(3).strip()
+                if current_title:
+                    sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
+                else:
+                    abstract = "\n".join(current_content).strip()
+                current_title = heading_text
+                current_content = []
+                is_heading = True
+            if is_heading:
+                continue
+
+            # --- 2) Known section names (with or without leading # markers) ---
+            for prefix in ["Abstract", "Introduction", "Literature", "Related Work", "Methodology",
+                           "System Design", "Implementation", "Experimental", "Results", "Discussion",
+                           "Conclusion", "Future Work", "References"]:
+                clean = re.sub(r'^#+\s*', '', line_stripped)
+                if clean.lower().startswith(prefix.lower()) and (clean.endswith(":") or len(clean) < len(prefix) + 5):
+                    if current_title:
+                        sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
+                    else:
+                        abstract = "\n".join(current_content).strip()
+                    current_title = prefix
+                    current_content = []
+                    is_heading = True
+                    break
+            if is_heading:
+                continue
+
+            # --- 3) Roman numeral headings: "I. Introduction", "## II. Related Work", etc. ---
+            rn_match = re.match(r'^(?:#+\s*)?(([IVXLCDM]+))\.(\s|$)', line_stripped)
+            if rn_match:
+                candidate = rn_match.group(1)
+                if candidate in roman_numerals:
+                    # Extract heading text after the Roman numeral
+                    after_dot = line_stripped[rn_match.end():].strip()
+                    heading_text = f"{candidate}. {after_dot}" if after_dot else f"{candidate}."
                     if current_title:
                         sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
                     else:
@@ -218,23 +324,26 @@ def parse_paper_text(paper_text, analysis, session_id):
                     current_title = heading_text
                     current_content = []
                     is_heading = True
-                    break
             if is_heading:
                 continue
 
-            for prefix in ["Abstract", "Introduction", "Literature", "Related Work", "Methodology",
-                           "System Design", "Implementation", "Experimental", "Results", "Discussion",
-                           "Conclusion", "Future Work", "References"]:
-                if line_stripped.lower().startswith(prefix.lower()) and (line_stripped.endswith(":") or len(line_stripped) < len(prefix) + 5):
-                    if current_title:
-                        sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
-                    else:
-                        abstract = "\n".join(current_content).strip()
-                    current_title = prefix
-                    current_content = []
-                    break
-            else:
-                current_content.append(line)
+            # --- 4) Numbered headings: "1. Introduction", "## 2. Related Work", etc. ---
+            num_match = re.match(r'^(?:#+\s*)?(\d+)\.(\s|$)', line_stripped)
+            if num_match:
+                after_dot = line_stripped[num_match.end():].strip()
+                heading_text = f"{num_match.group(1)}. {after_dot}" if after_dot else f"{num_match.group(1)}."
+                if current_title:
+                    sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
+                else:
+                    abstract = "\n".join(current_content).strip()
+                current_title = heading_text
+                current_content = []
+                is_heading = True
+            if is_heading:
+                continue
+
+            # Not a heading — append as content
+            current_content.append(line)
         else:
             current_content.append(line)
 
@@ -255,9 +364,11 @@ def parse_paper_text(paper_text, analysis, session_id):
         intro = other_sections[0]["content"]
         abstract_section = intro[:500]
 
+    authors = analysis.get("authors") or ["Author A", "Author B"]
+    domain = analysis.get("domain") or "Engineering"
     authors_data = []
-    for i, author in enumerate(analysis.get("authors", ["Author A"])):
-        authors_data.append({"name": author, "affiliation": f"Department of {analysis.get('domain', 'Engineering')}"})
+    for i, author in enumerate(authors):
+        authors_data.append({"name": author, "affiliation": f"Department of {domain}"})
 
     refs = [
         {"citation": f"J. Smith, ``Advances in {analysis.get('domain', 'Technology')},'' IEEE Trans., vol. 45, no. 3, pp. 123-135, 2023."},
@@ -280,7 +391,8 @@ def parse_paper_text(paper_text, analysis, session_id):
         abstract=abstract_section or abstract or paper_text[:500],
         sections=other_sections,
         keywords=analysis.get("keywords", [analysis.get("domain", "Technology")]),
-        domain=analysis.get("domain", "Technology")
+        domain=analysis.get("domain", "Technology"),
+        references=refs
     )
     base_name = analysis.get('title', 'paper').replace(' ', '_')
     return {
@@ -396,6 +508,72 @@ async def download(session_id: str, fmt: str):
         pdf.add_page()
         cy = write_title_block()
 
+        def render_table(table_para, x_start, cy):
+            nonlocal col, first_page
+            lines = table_para.strip().split('\n')
+            lines = [l.strip() for l in lines if l.strip()]
+            parsed_rows = []
+            max_cols = 0
+            for line in lines:
+                if '|' not in line:
+                    continue
+                if re.match(r'^[\s\|\+\-\=]+$', line):
+                    continue
+                cells = [c.strip() for c in line.split('|')]
+                if line.startswith('|'):
+                    cells = cells[1:]
+                if line.endswith('|'):
+                    cells = cells[:-1]
+                if cells:
+                    max_cols = max(max_cols, len(cells))
+                    parsed_rows.append(cells)
+            if not parsed_rows or max_cols == 0:
+                pdf.set_font("Times", "", 10)
+                pdf.set_xy(x_start, cy)
+                pdf.multi_cell(col_w, 5.5, table_para, align="J", new_x="LMARGIN", new_y="NEXT")
+                return pdf.get_y()
+            cell_w = max(10, col_w / max_cols)
+            line_h = 5.5
+            y = cy
+            row_heights = []
+            for row_idx, row in enumerate(parsed_rows):
+                padded = row + [''] * (max_cols - len(row))
+                max_h = 0
+                for cell_text in padded:
+                    tw = pdf.get_string_width(cell_text or "")
+                    num_lines = max(1, int(tw / max(1, cell_w - 2)) + 1)
+                    max_h = max(max_h, num_lines * line_h)
+                max_h = max(max_h, line_h + 1)
+                row_heights.append(max_h)
+            pdf.set_line_width(0.2)
+            pdf.set_draw_color(80, 80, 80)
+            for row_idx, row in enumerate(parsed_rows):
+                padded = row + [''] * (max_cols - len(row))
+                rh = row_heights[row_idx]
+                if y + rh > bh:
+                    if col == 0:
+                        col = 1
+                        y = tm
+                        pdf.set_xy(lm + col_w + gutter, y)
+                    else:
+                        pdf.add_page()
+                        first_page = False
+                        col = 0
+                        y = tm
+                        pdf.set_xy(lm, y)
+                if row_idx == 0:
+                    pdf.set_font("Times", "B", 9.5)
+                else:
+                    pdf.set_font("Times", "", 9.5)
+                current_x = x_start
+                for ci, cell_text in enumerate(padded):
+                    cx = current_x + ci * cell_w
+                    pdf.rect(cx, y, cell_w, rh)
+                    pdf.set_xy(cx + 0.5, y + 0.5)
+                    pdf.multi_cell(cell_w - 1, line_h, cell_text or "", align="L")
+                y += rh
+            return y
+
         for sec_title, sec_content in sections:
             ensure_space(8)
             pdf.set_font("Times", "B", 10)
@@ -410,10 +588,15 @@ async def download(session_id: str, fmt: str):
                 if not para:
                     continue
                 ensure_space(6)
-                pdf.set_font("Times", "", 10)
-                pdf.set_xy(lm + (col_w + gutter) * col, cy)
-                pdf.multi_cell(col_w, 5.5, para, align="J", new_x="LMARGIN", new_y="NEXT")
-                cy = pdf.get_y()
+                x_start = lm + (col_w + gutter) * col
+                if '|' in para:
+                    pdf.set_xy(x_start, cy)
+                    cy = render_table(para, x_start, cy)
+                else:
+                    pdf.set_font("Times", "", 10)
+                    pdf.set_xy(x_start, cy)
+                    pdf.multi_cell(col_w, 5.5, para, align="J", new_x="LMARGIN", new_y="NEXT")
+                    cy = pdf.get_y()
                 pdf.ln(1)
                 cy = pdf.get_y()
 
