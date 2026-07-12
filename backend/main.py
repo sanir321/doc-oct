@@ -2,50 +2,18 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 import uvicorn
-import os, re, uuid, tempfile, json, threading
+import os, re, uuid, tempfile, json
 import PyPDF2
 from docx import Document
 from config import MAX_FILE_SIZE, UPLOAD_DIR
 from services.llm_service import analyze_document, generate_question, check_answer_clear, generate_paper_stream
-
 
 app = FastAPI(title="Research Paper Generator")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-SESSION_FILE = "sessions.json"
-_save_lock = threading.Lock()
-
 sessions = {}
-
-def _load_sessions():
-    global sessions
-    try:
-        if os.path.exists(SESSION_FILE):
-            with open(SESSION_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                if isinstance(loaded, dict):
-                    sessions.update(loaded)
-    except Exception as e:
-        print(f"Session load warning: {e}")
-
-def _save_sessions():
-    try:
-        with _save_lock:
-            to_save = {}
-            for sid, s in sessions.items():
-                clean = {}
-                for k, v in s.items():
-                    if isinstance(v, (str, int, float, bool, list, dict, type(None))):
-                        clean[k] = v
-                to_save[sid] = clean
-            with open(SESSION_FILE, "w", encoding="utf-8") as f:
-                json.dump(to_save, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Session save warning: {e}")
-
-_load_sessions()
 
 def generate_ieee_html(title, authors, abstract, sections, keywords, domain, references=None):
     # Build author HTML with per-affiliation superscript markers
@@ -197,7 +165,6 @@ async def upload_file(file: UploadFile = File(...)):
 
     if question and session_id in sessions:
         sessions[session_id]["_last_qtype"] = question.get("type", "")
-    _save_sessions()
     return {"session_id": session_id, "analysis": analysis, "question": question}
 
 @app.post("/api/ask/{session_id}")
@@ -260,7 +227,6 @@ async def submit_answer(session_id: str, data: dict):
             s["analysis"]["title"] = answer.strip()
         s["answers"]["_title_ok"] = True
 
-    _save_sessions()
     clarity = check_answer_clear(s["file_text"], question, answer)
     if not clarity.get("clear"):
         return {"follow_up": clarity["follow_up"], "options": clarity.get("options", []), "needs_clarification": True}
@@ -285,8 +251,6 @@ def _heading_text(line):
     if not stripped or stripped.startswith("```") or stripped.startswith("==="):
         return None
 
-    roman_numerals = {"I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV"}
-
     m = re.match(r'^(#{1,3})(\s*)(.*)', stripped)
     if m and (m.group(2) or not m.group(3) or len(m.group(1)) >= 2):
         return m.group(3).strip() or None
@@ -297,16 +261,6 @@ def _heading_text(line):
         clean = re.sub(r'^#+\s*', '', stripped)
         if clean.lower().startswith(prefix.lower()) and (clean.endswith(":") or len(clean) < len(prefix) + 5):
             return prefix
-
-    rn_match = re.match(r'^(?:#+\s*)?([IVXLCDM]+)\.(\s|$)', stripped)
-    if rn_match and rn_match.group(1) in roman_numerals:
-        after = stripped[rn_match.end():].strip()
-        return f"{rn_match.group(1)}. {after}" if after else f"{rn_match.group(1)}."
-
-    num_match = re.match(r'^(?:#+\s*)?(\d+)\.(\s|$)', stripped)
-    if num_match:
-        after = stripped[num_match.end():].strip()
-        return f"{num_match.group(1)}. {after}" if after else f"{num_match.group(1)}."
 
     return None
 
@@ -390,25 +344,6 @@ def parse_paper_text(paper_text, analysis, session_id):
         "filename_html": f"{base_name}.html"
     }
 
-@app.get("/api/session/{session_id}")
-async def get_session(session_id: str):
-    s = sessions.get(session_id)
-    if not s:
-        raise HTTPException(404, "Session not found")
-    analysis = s.get("analysis", {})
-    return {
-        "session_id": session_id,
-        "filename": s.get("filename", ""),
-        "analysis": analysis,
-        "ready": s.get("ready", False),
-        "has_paper": bool(s.get("paper_text")),
-        "has_html": bool(s.get("html_content")),
-        "qa_count": len(s.get("answers", {})),
-        "title": analysis.get("title", ""),
-        "sections": analysis.get("present_sections", []),
-        "questions_answered": list(s.get("answers", {}).keys()),
-    }
-
 @app.get("/api/generate-stream/{session_id}")
 def generate_stream(session_id: str):
     s = sessions.get(session_id)
@@ -426,12 +361,79 @@ def generate_stream(session_id: str):
             s["paper_text"] = paper_text
             result = parse_paper_text(paper_text, s["analysis"], session_id)
             s["html_content"] = result["html_content"]
-            _save_sessions()
             yield f"data: {json.dumps({'type': 'done', 'result': result})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+def generate_pdf_from_html(html_content: str) -> bytes:
+    from fpdf import FPDF
+
+    def extract_section(regex, html, group=1):
+        m = re.search(regex, html, re.DOTALL)
+        return m.group(group).strip() if m else ""
+
+    title = extract_section(r'<h1>(.*?)</h1>', html_content)
+    abstract = extract_section(r'abstract-label">(.*?)</span>\s*<p>(.*?)</p>', html_content, 2)
+    keywords = extract_section(r'kw-label">.*?</span>(.*?)</div>', html_content)
+    abstract = re.sub(r'<[^>]+>', '', abstract)
+    keywords = re.sub(r'<[^>]+>', '', keywords)
+
+    sections_raw = re.findall(r'<h2>(.*?)</h2>(.*?)(?=<h2>|<div class="references"|$)', html_content, re.DOTALL)
+    sections = []
+    for t, body in sections_raw:
+        t_clean = re.sub(r'<[^>]+>', '', t).strip()
+        ps = re.findall(r'<p>(.*?)</p>', body, re.DOTALL)
+        content = '\n\n'.join(re.sub(r'<[^>]+>', '', p).strip().replace('<br>', '\n') for p in ps if p.strip())
+        if t_clean and content:
+            sections.append((t_clean, content))
+
+    def ascii_safe(t):
+        t = t.replace('\u2014', '--').replace('\u2013', '-')
+        t = t.replace('\u2018', "'").replace('\u2019', "'")
+        t = t.replace('\u201c', '"').replace('\u201d', '"')
+        t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
+        t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
+        return t.encode('ascii', 'replace').decode('ascii')
+    sections = [(ascii_safe(t), ascii_safe(c)) for t, c in sections]
+    title = ascii_safe(title)
+    abstract = ascii_safe(abstract)
+    keywords = ascii_safe(keywords)
+
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=18)
+    lm, rm = 20, 20
+    pw = 210
+    cw = pw - lm - rm
+
+    pdf.add_page()
+    pdf.set_font("Times", "B", 20)
+    pdf.multi_cell(cw, 9, title, align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+    if abstract:
+        pdf.set_font("Times", "I", 10)
+        pdf.multi_cell(cw, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+    if keywords:
+        pdf.set_font("Times", "I", 10)
+        pdf.multi_cell(cw, 5, f"Index Terms -- {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(4)
+
+    for sec_title, sec_content in sections:
+        pdf.set_font("Times", "B", 12)
+        pdf.multi_cell(cw, 6, sec_title, align="L", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1)
+
+        for para in sec_content.split('\n'):
+            para = para.strip()
+            if not para:
+                continue
+            pdf.set_font("Times", "", 10)
+            pdf.multi_cell(cw, 5, para, align="J", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1)
+
+    return bytes(pdf.output())
 
 @app.get("/api/download/{session_id}/{fmt}")
 async def download(session_id: str, fmt: str):
@@ -443,73 +445,7 @@ async def download(session_id: str, fmt: str):
         return Response(content=s["html_content"], media_type="text/html",
                         headers={"Content-Disposition": f"attachment; filename={base}.html"})
     if fmt == "pdf" and s.get("html_content"):
-        from fpdf import FPDF
-        html = s["html_content"]
-
-        def extract_section(regex, html, group=1):
-            m = re.search(regex, html, re.DOTALL)
-            return m.group(group).strip() if m else ""
-
-        title = extract_section(r'<h1>(.*?)</h1>', html)
-        abstract = extract_section(r'abstract-label">(.*?)</span>\s*<p>(.*?)</p>', html, 2)
-        keywords = extract_section(r'kw-label">.*?</span>(.*?)</div>', html)
-        abstract = re.sub(r'<[^>]+>', '', abstract)
-        keywords = re.sub(r'<[^>]+>', '', keywords)
-
-        sections_raw = re.findall(r'<h2>(.*?)</h2>(.*?)(?=<h2>|<div class="references"|$)', html, re.DOTALL)
-        sections = []
-        for t, body in sections_raw:
-            t_clean = re.sub(r'<[^>]+>', '', t).strip()
-            ps = re.findall(r'<p>(.*?)</p>', body, re.DOTALL)
-            content = '\n\n'.join(re.sub(r'<[^>]+>', '', p).strip().replace('<br>', '\n') for p in ps if p.strip())
-            if t_clean and content:
-                sections.append((t_clean, content))
-
-        def ascii_safe(t):
-            t = t.replace('\u2014', '--').replace('\u2013', '-')
-            t = t.replace('\u2018', "'").replace('\u2019', "'")
-            t = t.replace('\u201c', '"').replace('\u201d', '"')
-            t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
-            t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
-            return t.encode('ascii', 'replace').decode('ascii')
-        sections = [(ascii_safe(t), ascii_safe(c)) for t, c in sections]
-        title = ascii_safe(title)
-        abstract = ascii_safe(abstract)
-        keywords = ascii_safe(keywords)
-
-        pdf = FPDF(orientation="P", unit="mm", format="A4")
-        pdf.set_auto_page_break(auto=True, margin=18)
-        lm, rm = 20, 20
-        pw = 210
-        cw = pw - lm - rm
-
-        pdf.add_page()
-        pdf.set_font("Times", "B", 20)
-        pdf.multi_cell(cw, 9, title, align="C", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(3)
-        if abstract:
-            pdf.set_font("Times", "I", 10)
-            pdf.multi_cell(cw, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(2)
-        if keywords:
-            pdf.set_font("Times", "I", 10)
-            pdf.multi_cell(cw, 5, f"Index Terms -- {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(4)
-
-        for sec_title, sec_content in sections:
-            pdf.set_font("Times", "B", 12)
-            pdf.multi_cell(cw, 6, sec_title, align="L", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(1)
-
-            for para in sec_content.split('\n'):
-                para = para.strip()
-                if not para:
-                    continue
-                pdf.set_font("Times", "", 10)
-                pdf.multi_cell(cw, 5, para, align="J", new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(1)
-
-        pdf_bytes = bytes(pdf.output())
+        pdf_bytes = generate_pdf_from_html(s["html_content"])
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={base}.pdf"})
     raise HTTPException(404, "Format not found")

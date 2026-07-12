@@ -30,157 +30,6 @@ function TypingDots() {
   );
 }
 
-function CoralButton({ children, outline, danger, dark, onClick, disabled, small, className = '' }) {
-  const size = small ? 'text-xs px-3 py-1.5' : 'text-sm px-5 py-2.5';
-  let style;
-  if (disabled) style = 'bg-hairline text-muted-soft opacity-40 cursor-not-allowed';
-  else if (danger) style = 'bg-error text-white cursor-pointer';
-  else if (outline) style = 'bg-transparent text-body border border-hairline cursor-pointer';
-  else if (dark) style = 'bg-transparent text-on-dark-soft border border-surface-dark-elevated hover:text-white hover:border-on-dark-soft cursor-pointer';
-  else style = 'bg-primary text-white cursor-pointer';
-  return (
-    <button className={`rounded-full font-medium transition-all active:scale-[0.95] ${style} ${size} ${className}`}
-      onClick={onClick} disabled={disabled}>{children}</button>
-  );
-}
-
-function Card({ children, hover, style, className = '' }) {
-  return (
-    <div className={`rounded-2xl border transition-all duration-200 ${hover ? 'hover:scale-[1.01] hover:shadow-md' : ''} bg-surface-card border-hairline ${className}`}
-      style={style}>
-      {children}
-    </div>
-  );
-}
-
-function DocIcon({ color }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color || '#6c6a64'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </svg>
-  );
-}
-
-function Sidebar({ current, history, onSelectDoc, onReset }) {
-  let profile = null;
-  try { const p = localStorage.getItem('userProfile'); if (p) profile = JSON.parse(p); } catch {}
-
-  return (
-    <aside className="hidden md:flex flex-col w-64 shrink-0 min-h-0 h-full">
-      <div className="flex-1 rounded-2xl border border-hairline bg-surface-card flex flex-col overflow-y-auto min-h-0"
-        style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-        {/* Header */}
-        <div className="px-4 py-3.5 border-b border-hairline shrink-0 flex items-center gap-2.5 text-ink">
-          <LogoMark size={16} />
-          <span className="text-sm font-medium">Research Paper AI</span>
-        </div>
-
-        {/* Document list */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {history.length === 0 && !current && (
-            <div className="text-center py-8">
-              <p className="text-xs font-mono uppercase mb-1 text-muted">Empty</p>
-              <p className="text-xs text-muted-soft">Upload a file to get started</p>
-            </div>
-          )}
-
-          {history.map((doc, i) => {
-            const isActive = current && current.name === doc.name && current.lastModified === doc.lastModified;
-            return (
-              <button key={`${doc.name}-${i}`}
-                onClick={() => onSelectDoc(doc)}
-                className="w-full text-left rounded-xl px-3 py-2.5 transition-all active:scale-[0.98]"
-                style={{
-                  backgroundColor: isActive ? 'var(--canvas)' : 'transparent',
-                  border: isActive ? '1px solid var(--hairline)' : '1px solid transparent',
-                }}>
-                <div className="flex items-start gap-2.5">
-                  <span className="mt-0.5 shrink-0"><DocIcon /></span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm truncate font-medium text-ink">{doc.name}</p>
-                    {doc.title && (
-                      <p className="text-[11px] truncate mt-0.5 text-muted-soft">{doc.title}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-mono text-muted-soft">
-                        {formatSize(doc.size)}
-                      </span>
-                      <span className="text-[10px] text-muted-soft">
-                        {new Date(doc.uploadedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
-                  </div>
-                  {isActive && (
-                    <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Current session details */}
-        {current && (
-          <div className="px-4 py-3 border-t border-hairline shrink-0">
-            <p className="text-[10px] font-mono uppercase mb-1.5 text-muted">Active Session</p>
-            <div className="rounded-xl px-3 py-2 bg-canvas">
-              <p className="text-xs font-medium truncate text-ink">{current.name}</p>
-              <p className="text-[10px] mt-0.5 text-muted-soft">
-                {current.sections || 0} sections · {current.qaCount || 0} Q&A
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* New Session button */}
-        <div className="p-3 border-t border-hairline shrink-0">
-          <button onClick={onReset}
-            className="w-full text-xs rounded-full px-3 py-2 text-center transition-all hover:opacity-80 active:scale-[0.95] flex items-center justify-center gap-1.5 bg-canvas text-muted">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6c6a64" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            New Session
-          </button>
-        </div>
-
-        {/* Profile at bottom */}
-        {profile && (
-          <div className="px-4 py-3 border-t border-hairline shrink-0 bg-canvas">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-                style={{ backgroundColor: '#cc785c', color: '#fff' }}>
-                {profile.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium truncate text-ink">{profile.name}</p>
-                <p className="text-[10px] truncate text-muted">{profile.course} · {profile.year}</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </aside>
-  );
-}
-
-const SIDEBAR_KEY = 'rpg_sidebar_history';
-
-function loadSidebarHistory() {
-  try {
-    const raw = localStorage.getItem(SIDEBAR_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveSidebarHistory(history) {
-  try { localStorage.setItem(SIDEBAR_KEY, JSON.stringify(history)); } catch {}
-}
-
 export default function PaperWizard({ onNewSession }) {
   const [step, setStep] = useState(0);
   const [prevStep, setPrevStep] = useState(0);
@@ -188,7 +37,7 @@ export default function PaperWizard({ onNewSession }) {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [files, setFiles] = useState([]);
+  const [file, setFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [question, setQuestion] = useState(null);
   const [showFollowUp, setShowFollowUp] = useState(false);
@@ -202,12 +51,10 @@ export default function PaperWizard({ onNewSession }) {
   const streamDone = useRef(false);
   const [customAnswer, setCustomAnswer] = useState('');
   const [customFollowUp, setCustomFollowUp] = useState('');
-  const [uploadHistory, setUploadHistory] = useState(loadSidebarHistory);
   const chatEnd = useRef(null);
   const fileRef = useRef(null);
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, aiTyping]);
-  useEffect(() => { saveSidebarHistory(uploadHistory); }, [uploadHistory]);
 
   const goStep = useCallback((s) => {
     setPrevStep(step);
@@ -216,54 +63,30 @@ export default function PaperWizard({ onNewSession }) {
 
   const handleDragOver = (e) => { e.preventDefault(); setDragOver(true); };
   const handleDragLeave = () => setDragOver(false);
-  const mergeFiles = (incoming) => setFiles(prev => {
-    const existing = new Set(prev.map(f => f.name + f.lastModified));
-    return [...prev, ...incoming.filter(f => !existing.has(f.name + f.lastModified))];
-  });
-  const handleDrop = (e) => { e.preventDefault(); setDragOver(false); mergeFiles(Array.from(e.dataTransfer.files)); };
-  const handleFileSelect = (e) => mergeFiles(Array.from(e.target.files));
-
-  const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
+  const handleDrop = (e) => { e.preventDefault(); setDragOver(false); setFile(e.dataTransfer.files[0]); };
+  const handleFileSelect = (e) => setFile(e.target.files[0]);
 
   const handleUpload = async () => {
-    if (!files.length) { setError('Select at least one file'); return; }
+    if (!file) { setError('Select a file'); return; }
     setLoading(true); setError('');
     try {
-      let lastData = null;
-      for (const f of files) {
-        const data = await apiService.uploadFile(f);
-        lastData = data;
-        setSessionId(data.session_id);
-        setAnalysis(data.analysis);
-        setUploadHistory(prev => {
-          const exists = prev.some(d => d.name === f.name && d.lastModified === f.lastModified);
-          if (exists) return prev;
-          return [...prev, {
-            name: f.name,
-            size: f.size,
-            lastModified: f.lastModified,
-            uploadedAt: Date.now(),
-            sessionId: data.session_id,
-            title: data.analysis?.title || null,
-            sections: data.analysis?.present_sections?.length || 0,
-          }];
-        });
-      }
-      if (!lastData) return;
+      const data = await apiService.uploadFile(file);
+      setSessionId(data.session_id);
+      setAnalysis(data.analysis);
       goStep(1);
-      if (lastData.question && !lastData.analysis.ready) {
-        setQuestion(lastData.question);
+      if (data.question && !data.analysis.ready) {
+        setQuestion(data.question);
         setAiTyping(true);
         setTimeout(() => {
           setAiTyping(false);
-          setMessages([{ role: 'ai', text: `I've analyzed ${files.length} file(s). Let me ask a few questions.\n\n**${lastData.question.question}**` }]);
+          setMessages([{ role: 'ai', text: `I've analyzed "${file.name}". Let me ask a few questions.\n\n${data.question.question}` }]);
           goStep(2);
         }, 600);
       } else {
         setAiTyping(true);
         setTimeout(() => {
           setAiTyping(false);
-          setMessages([{ role: 'ai', text: `I've analyzed ${files.length} file(s). The analysis is clear enough to generate a paper!` }]);
+          setMessages([{ role: 'ai', text: `I've analyzed "${file.name}". The analysis is clear enough to generate a paper!` }]);
           setReady(true);
         }, 600);
       }
@@ -332,7 +155,7 @@ export default function PaperWizard({ onNewSession }) {
         setMessages(prev => [...prev, { role: 'ai', text: 'Skipping — enough information to generate the paper!' }]);
       } else {
         setQuestion(data);
-        setMessages(prev => [...prev, { role: 'ai', text: `**${data.question}**` }]);
+        setMessages(prev => [...prev, { role: 'ai', text: `${data.question}` }]);
       }
       goStep(2);
     } catch (e) { setError(e.message); }
@@ -371,57 +194,13 @@ export default function PaperWizard({ onNewSession }) {
     };
   };
 
-  const handleReset = () => {
-    onNewSession();
-  };
-
-  const handleSelectDoc = async (doc) => {
-    if (!doc.sessionId || doc.sessionId === sessionId) return;
-    setLoading(true);
-    setError('');
-    try {
-      const data = await apiService.getSession(doc.sessionId);
-      setSessionId(data.session_id);
-      setAnalysis(data.analysis);
-      setReady(data.ready);
-      setFiles([]);
-      setQuestion(null);
-      setShowFollowUp(false);
-      setFollowUp(null);
-      setMessages(data.qa_count > 0
-        ? [{ role: 'ai', text: `Restored session from ${doc.name || 'previous upload'}.` }]
-        : []);
-      setResult(null);
-      setGenerating(false);
-      setLivePaper('');
-      setStep(data.ready ? (data.has_paper ? 3 : 2) : 1);
-    } catch (e) {
-      setError('Could not restore session — it may have expired.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const currentDocInfo = (files.length || (sessionId && analysis)) ? {
-    name: files.length ? (files.length === 1 ? files[0].name : `${files.length} files`) : (analysis?.title || 'Session'),
-    size: files.length ? files.reduce((s, f) => s + f.size, 0) : 0,
-    lastModified: files.length ? files[0].lastModified : Date.now(),
-    sections: analysis?.present_sections?.length || 0,
-    qaCount: messages.filter(m => m.role === 'user').length,
-  } : null;
+  const handleReset = () => { onNewSession(); };
 
   return (
     <div className="flex flex-1 min-h-0 p-3 md:p-4 gap-3 md:gap-6">
-      <Sidebar
-        current={currentDocInfo}
-        history={uploadHistory}
-        onSelectDoc={handleSelectDoc}
-        onReset={handleReset}
-      />
-
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <div className={`flex-1 flex flex-col max-w-5xl w-full mx-auto min-h-0 ${(result || generating) ? 'py-0 space-y-0' : 'py-6 space-y-6'}`}>
-          {/* Step indicators — hidden when generating or viewing result */}
+
           {!result && !generating && (
           <div className="flex justify-center items-center gap-0.5 md:gap-1 flex-wrap">
             {steps.map((s, i) => (
@@ -458,37 +237,24 @@ export default function PaperWizard({ onNewSession }) {
               style={{ backgroundColor: '#fdf0ef', borderColor: '#e8b4b4', color: '#c64545' }}>{error}</div>
           )}
 
-
-          {/* Step 0: Upload — unified drop zone, no nested card */}
           {step === 0 && (
             <div
               className="rounded-2xl border-2 transition-all duration-300 cursor-pointer select-none flex flex-col items-center justify-center text-center"
               style={{
-                borderStyle: files.length ? 'solid' : 'dashed',
-                borderColor: dragOver ? '#cc785c' : files.length ? '#cc785c' : '#e6dfd8',
-                backgroundColor: files.length
-                    ? '#faf9f5'
-                    : dragOver
-                      ? 'rgba(204,120,92,0.04)'
-                      : '#efe9de',
-                padding: files.length ? '32px 24px' : '64px 40px',
+                borderStyle: file ? 'solid' : 'dashed',
+                borderColor: dragOver ? '#cc785c' : file ? '#cc785c' : '#e6dfd8',
+                backgroundColor: file ? '#faf9f5' : dragOver ? 'rgba(204,120,92,0.04)' : '#efe9de',
+                padding: file ? '32px 24px' : '64px 40px',
                 transform: dragOver ? 'scale(1.01)' : 'scale(1)',
-                boxShadow: dragOver
-                  ? '0 0 0 4px rgba(204,120,92,0.12), 0 4px 20px rgba(0,0,0,0.06)'
-                  : 'none',
+                boxShadow: dragOver ? '0 0 0 4px rgba(204,120,92,0.12), 0 4px 20px rgba(0,0,0,0.06)' : 'none',
               }}
               onClick={() => fileRef.current?.click()}
               onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
 
-              {/* Empty state */}
-              {!files.length && (
+              {!file && (
                 <>
                   <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
-                    style={{
-                      backgroundColor: '#e6dfd8',
-                      transform: dragOver ? 'scale(1.1)' : 'scale(1)',
-                      transition: 'transform 0.3s',
-                    }}>
+                    style={{ backgroundColor: '#e6dfd8', transform: dragOver ? 'scale(1.1)' : 'scale(1)', transition: 'transform 0.3s' }}>
                     <LogoMark size={32} />
                   </div>
                   <p className="text-lg mb-1.5 font-medium" style={{ color: '#141413' }}>
@@ -496,19 +262,13 @@ export default function PaperWizard({ onNewSession }) {
                   </p>
                   <p className="text-sm mb-6" style={{ color: '#6c6a64' }}>
                     Drag & drop or{' '}
-                    <span style={{ color: '#cc785c', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
-                      browse
-                    </span>{' '}
-                    — any file type supported
+                    <span style={{ color: '#cc785c', textDecoration: 'underline', textUnderlineOffset: '2px' }}>browse</span>
+                    {' '}— any file type supported
                   </p>
-                  <input ref={fileRef} type="file" multiple
-                    className="hidden" onChange={handleFileSelect} />
-
-                  {/* Format info */}
+                  <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full max-w-lg mt-2">
                     {FORMAT_INFO.map(fmt => (
-                      <div key={fmt.label} className="rounded-xl px-2 py-2 text-center"
-                        style={{ backgroundColor: '#e6dfd8' }}>
+                      <div key={fmt.label} className="rounded-xl px-2 py-2 text-center" style={{ backgroundColor: '#e6dfd8' }}>
                         <p className="text-xs font-semibold" style={{ color: '#141413' }}>{fmt.label}</p>
                         <p className="text-[10px] mt-0.5 leading-tight" style={{ color: '#6c6a64' }}>{fmt.desc}</p>
                       </div>
@@ -517,50 +277,37 @@ export default function PaperWizard({ onNewSession }) {
                 </>
               )}
 
-              {/* Files selected state */}
-              {files.length > 0 && (
+              {file && (
                 <>
-                  <div className="w-full max-w-md space-y-2 mb-5">
-                    {files.map((f, idx) => (
-                      <div key={f.name + f.lastModified}
-                        className="flex items-center gap-3 rounded-xl px-4 py-3 text-left"
-                        style={{ backgroundColor: 'rgba(204,120,92,0.06)', border: '1px solid rgba(204,120,92,0.15)' }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                          stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                          <polyline points="14 2 14 8 20 8" />
-                          <line x1="16" y1="13" x2="8" y2="13" />
-                          <line x1="16" y1="17" x2="8" y2="17" />
-                        </svg>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm truncate font-medium" style={{ color: '#141413' }}>{f.name}</p>
-                          <p className="text-xs" style={{ color: '#6c6a64' }}>{formatSize(f.size)}</p>
-                        </div>
-                        <button onClick={e => { e.stopPropagation(); removeFile(idx); }}
-                          className="text-xs hover:opacity-70 shrink-0" style={{ color: '#c64545' }}>
-                          ✕
-                        </button>
+                  <div className="w-full max-w-md mb-5">
+                    <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-left"
+                      style={{ backgroundColor: 'rgba(204,120,92,0.06)', border: '1px solid rgba(204,120,92,0.15)' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                      </svg>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm truncate font-medium" style={{ color: '#141413' }}>{file.name}</p>
+                        <p className="text-xs" style={{ color: '#6c6a64' }}>{formatSize(file.size)}</p>
                       </div>
-                    ))}
+                      <button onClick={e => { e.stopPropagation(); setFile(null); }}
+                        className="text-xs hover:opacity-70 shrink-0" style={{ color: '#c64545' }}>✕</button>
+                    </div>
                   </div>
-                  <input ref={fileRef} type="file" multiple
-                    className="hidden" onChange={handleFileSelect} />
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <CoralButton small outline onClick={e => { e.stopPropagation(); fileRef.current?.click(); }}>
-                      + Add More
-                    </CoralButton>
-                    <CoralButton disabled={loading} onClick={e => { e.stopPropagation(); handleUpload(); }}>
-                      {loading ? <>Analyzing<TypingDots /></> : `Upload & Analyze (${files.length})`}
-                    </CoralButton>
-                  </div>
+                  <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
+                  <button onClick={e => { e.stopPropagation(); handleUpload(); }} disabled={loading}
+                    className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95] disabled:opacity-40 disabled:cursor-not-allowed">
+                    {loading ? <>Analyzing<TypingDots /></> : 'Upload & Analyze'}
+                  </button>
                 </>
               )}
             </div>
           )}
 
-          {/* Step 1: Analysis */}
           {step === 1 && !loading && analysis && (
-            <Card hover>
+            <div className="rounded-2xl border transition-all duration-200 bg-surface-card border-hairline">
               <div className="p-5 md:p-8">
                 <h2 className="text-xl md:text-2xl font-display mb-4 font-normal text-ink" style={{ letterSpacing: '-0.5px' }}>Analysis complete</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -594,14 +341,14 @@ export default function PaperWizard({ onNewSession }) {
                     </div>
                   </div>
                 )}
-                <CoralButton onClick={skipInterview}>
+                <button onClick={skipInterview}
+                  className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95]">
                   {analysis.ready ? 'Skip to Generate →' : 'Start Interview →'}
-                </CoralButton>
+                </button>
               </div>
-            </Card>
+            </div>
           )}
 
-          {/* Loading skeleton */}
           {step === 1 && loading && (
             <div className="rounded-2xl p-8 border animate-pulse bg-surface-card border-hairline">
               <div className="h-6 w-48 rounded-full mb-4 bg-hairline" />
@@ -613,7 +360,6 @@ export default function PaperWizard({ onNewSession }) {
             </div>
           )}
 
-          {/* Step 2: Interview */}
           {(step === 2 || (step === 1 && question)) && (
             <div className="flex flex-col border rounded-2xl overflow-hidden flex-1 min-h-0 bg-canvas border-hairline"
               style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
@@ -641,10 +387,9 @@ export default function PaperWizard({ onNewSession }) {
                           style={m.role === 'user'
                             ? { backgroundColor: 'var(--primary)', color: '#ffffff', borderBottomRightRadius: '6px' }
                             : { backgroundColor: 'var(--surface-card)', color: '#252523', borderBottomLeftRadius: '6px' }}>
-                          {m.text.split('\n').map((l, j) => {
-                            const clean = l.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
-                            return <p key={j} className={j > 0 ? 'mt-2' : ''}>{clean}</p>;
-                          })}
+                          {m.text.split('\n').map((l, j) => (
+                            <p key={j} className={j > 0 ? 'mt-2' : ''}>{l}</p>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -671,7 +416,7 @@ export default function PaperWizard({ onNewSession }) {
                         <line x1="12" y1="16" x2="12" y2="12" />
                         <line x1="12" y1="8" x2="12.01" y2="8" />
                       </svg>
-                      Clarify: {followUp?.follow_up?.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')}
+                      Clarify: {followUp?.follow_up?.replace(/\*\*(.*?)\*\*/g, '$1')}
                     </p>
                     {followUp?.options?.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-2">
@@ -691,9 +436,10 @@ export default function PaperWizard({ onNewSession }) {
                         onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px rgba(204,120,92,0.15)'; }}
                         onBlur={e => { e.target.style.borderColor = '#e8b4b4'; e.target.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.04)'; }}
                         onKeyDown={e => e.key === 'Enter' && handleFollowUpAnswer(customFollowUp)} />
-                      <CoralButton small danger onClick={() => handleFollowUpAnswer(customFollowUp)} disabled={loading || !customFollowUp.trim()}>
+                      <button onClick={() => handleFollowUpAnswer(customFollowUp)} disabled={loading || !customFollowUp.trim()}
+                        className="rounded-full text-sm font-medium px-4 py-2 bg-error text-white transition-all active:scale-[0.95] disabled:opacity-40">
                         Send
-                      </CoralButton>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -722,18 +468,13 @@ export default function PaperWizard({ onNewSession }) {
                         style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.04)' }}
                         placeholder={question.options?.length > 0 ? 'Or type a custom answer...' : 'Type your answer...'}
                         value={customAnswer} onChange={e => setCustomAnswer(e.target.value)}
-                        onFocus={e => {
-                          e.target.style.borderColor = 'var(--primary)';
-                          e.target.style.boxShadow = '0 0 0 3px rgba(204,120,92,0.15)';
-                        }}
-                        onBlur={e => {
-                          e.target.style.borderColor = 'var(--hairline)';
-                          e.target.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.04)';
-                        }}
+                        onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px rgba(204,120,92,0.15)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'var(--hairline)'; e.target.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.04)'; }}
                         onKeyDown={e => e.key === 'Enter' && answerQuestion(customAnswer)} />
-                      <CoralButton small onClick={() => answerQuestion(customAnswer)} disabled={loading || !customAnswer.trim()}>
+                      <button onClick={() => answerQuestion(customAnswer)} disabled={loading || !customAnswer.trim()}
+                        className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95] disabled:opacity-40">
                         Send
-                      </CoralButton>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -744,19 +485,18 @@ export default function PaperWizard({ onNewSession }) {
             </div>
           )}
 
-          {/* Step 3: Generate */}
           {(step === 3 || ready) && !result && !generating && (
-            <Card hover>
+            <div className="rounded-2xl border transition-all duration-200 bg-surface-card border-hairline">
               <div className="p-5 md:p-8 text-center">
                 <p className="text-base md:text-lg mb-4 font-display text-ink" style={{ letterSpacing: '-0.3px' }}>Ready to generate your IEEE-format paper</p>
-                <CoralButton onClick={handleGenerate}>
+                <button onClick={handleGenerate}
+                  className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95]">
                   Generate Paper
-                </CoralButton>
+                </button>
               </div>
-            </Card>
+            </div>
           )}
 
-          {/* Live document preview while generating */}
           {generating && (
             <div className="flex flex-col border rounded-2xl overflow-hidden bg-surface-dark border-surface-dark-elevated min-h-0"
               style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: 'calc(100vh - 180px)' }}>
@@ -773,7 +513,6 @@ export default function PaperWizard({ onNewSession }) {
             </div>
           )}
 
-          {/* Result — PDF preview + downloads */}
           {result && (
             <div className="flex flex-col rounded-2xl border bg-surface-dark border-surface-dark-elevated overflow-hidden min-h-0"
               style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: 'calc(100vh - 180px)' }}>
