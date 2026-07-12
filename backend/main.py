@@ -408,7 +408,12 @@ async def download(session_id: str, fmt: str):
         sections = [(re.sub(r'<[^>]+>', '', t).strip(), re.sub(r'<[^>]+>', '', c).strip().replace('<br>', '\n')) for t, c in sections_raw]
 
         def ascii_safe(t):
-            return t.replace('\u2014', '--').replace('\u2013', '-').replace('\u2018', "'").replace('\u2019', "'").replace('\u201c', '"').replace('\u201d', '"').encode('ascii', 'replace').decode('ascii')
+            t = t.replace('\u2014', '--').replace('\u2013', '-')
+            t = t.replace('\u2018', "'").replace('\u2019', "'")
+            t = t.replace('\u201c', '"').replace('\u201d', '"')
+            t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
+            t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
+            return t.encode('ascii', 'replace').decode('ascii')
         title, abstract, keywords = ascii_safe(title), ascii_safe(abstract), ascii_safe(keywords)
         sections = [(ascii_safe(t), ascii_safe(c)) for t, c in sections]
 
