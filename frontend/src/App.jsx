@@ -73,6 +73,19 @@ const STEPS = [
   { num: '04', title: 'Generate', desc: 'Get a complete IEEE-format paper ready for submission.' },
 ];
 
+function LogoMark({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <rect x="5" y="3" width="22" height="26" rx="2" stroke="#cc785c" strokeWidth="1.5" />
+      <line x1="9" y1="10" x2="23" y2="10" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="9" y1="15" x2="20" y2="15" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="9" y1="20" x2="17" y2="20" stroke="#cc785c" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="27" cy="6" r="6" fill="#cc785c"/>
+      <path d="M25 6h4M27 4v4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
 export default function App() {
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
@@ -111,7 +124,10 @@ export default function App() {
       {/* Fixed Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-canvas border-b border-hairline">
         <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
-          <span className="text-ink text-sm font-medium">Research Paper Generator</span>
+          <span className="text-ink text-sm font-medium flex items-center gap-2">
+            <LogoMark size={16} />
+            Research Paper AI
+          </span>
           <div className="flex items-center gap-4">
             <span className="text-muted-soft text-xs font-mono hidden sm:block">v1.0</span>
             <button onClick={handleGetStarted}
@@ -124,6 +140,9 @@ export default function App() {
 
       {/* Hero */}
       <section className="pt-24 md:pt-32 pb-20 md:pb-24 px-4 md:px-6 max-w-5xl mx-auto text-center">
+        <div className="mb-6 flex justify-center">
+          <LogoMark size={48} />
+        </div>
         <div className="inline-flex items-center gap-2 rounded-full px-[10px] py-[4px] mb-10 bg-surface-card">
           <span className="w-1.5 h-1.5 rounded-full bg-accent-teal" />
           <span className="text-[11px] font-semibold tracking-[0.88px] uppercase text-muted">
@@ -239,7 +258,10 @@ export default function App() {
       {/* Footer */}
       <footer className="py-12 md:py-16 px-6 bg-surface-dark">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm text-on-dark-soft">Research Paper Generator</span>
+          <span className="text-sm text-on-dark-soft flex items-center gap-2">
+            <LogoMark size={14} />
+            Research Paper AI
+          </span>
           <span className="text-xs font-mono text-on-dark-soft">AI-powered academic writing assistant</span>
         </div>
       </footer>
