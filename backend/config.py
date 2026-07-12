@@ -1,5 +1,6 @@
 import os
-OPENCODE_ZEN_API_KEY = os.environ.get("OPENCODE_ZEN_API_KEY", "sk-3ROrQRt9bYYTif1QwVCsQReov0kZ0Kqu8YNs8HGX61Y9VREBnAssUBaFHXQyfO29")
+# ponytail: no hardcoded secret — require env var (Railway sets it)
+OPENCODE_ZEN_API_KEY = os.environ.get("OPENCODE_ZEN_API_KEY", "")
 OPENCODE_ZEN_BASE_URL = "https://opencode.ai/zen/v1"
 LLM_MODEL = "nemotron-3-ultra-free"
 MAX_FILE_SIZE = 10 * 1024 * 1024
