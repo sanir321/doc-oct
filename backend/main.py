@@ -390,6 +390,25 @@ def parse_paper_text(paper_text, analysis, session_id):
         "filename_html": f"{base_name}.html"
     }
 
+@app.get("/api/session/{session_id}")
+async def get_session(session_id: str):
+    s = sessions.get(session_id)
+    if not s:
+        raise HTTPException(404, "Session not found")
+    analysis = s.get("analysis", {})
+    return {
+        "session_id": session_id,
+        "filename": s.get("filename", ""),
+        "analysis": analysis,
+        "ready": s.get("ready", False),
+        "has_paper": bool(s.get("paper_text")),
+        "has_html": bool(s.get("html_content")),
+        "qa_count": len(s.get("answers", {})),
+        "title": analysis.get("title", ""),
+        "sections": analysis.get("present_sections", []),
+        "questions_answered": list(s.get("answers", {}).keys()),
+    }
+
 @app.get("/api/generate-stream/{session_id}")
 def generate_stream(session_id: str):
     s = sessions.get(session_id)

@@ -168,6 +168,19 @@ function Sidebar({ current, history, onSelectDoc, onReset }) {
   );
 }
 
+const SIDEBAR_KEY = 'rpg_sidebar_history';
+
+function loadSidebarHistory() {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveSidebarHistory(history) {
+  try { localStorage.setItem(SIDEBAR_KEY, JSON.stringify(history)); } catch {}
+}
+
 export default function PaperWizard({ onNewSession }) {
   const [step, setStep] = useState(0);
   const [prevStep, setPrevStep] = useState(0);
@@ -189,11 +202,12 @@ export default function PaperWizard({ onNewSession }) {
   const streamDone = useRef(false);
   const [customAnswer, setCustomAnswer] = useState('');
   const [customFollowUp, setCustomFollowUp] = useState('');
-  const [uploadHistory, setUploadHistory] = useState([]);
+  const [uploadHistory, setUploadHistory] = useState(loadSidebarHistory);
   const chatEnd = useRef(null);
   const fileRef = useRef(null);
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, aiTyping]);
+  useEffect(() => { saveSidebarHistory(uploadHistory); }, [uploadHistory]);
 
   const goStep = useCallback((s) => {
     setPrevStep(step);
@@ -361,17 +375,37 @@ export default function PaperWizard({ onNewSession }) {
     onNewSession();
   };
 
-  const handleSelectDoc = (doc) => {
-    if (doc.sessionId && doc.sessionId !== sessionId) {
-      setSessionId(doc.sessionId);
-      goStep(1);
+  const handleSelectDoc = async (doc) => {
+    if (!doc.sessionId || doc.sessionId === sessionId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const data = await apiService.getSession(doc.sessionId);
+      setSessionId(data.session_id);
+      setAnalysis(data.analysis);
+      setReady(data.ready);
+      setFiles([]);
+      setQuestion(null);
+      setShowFollowUp(false);
+      setFollowUp(null);
+      setMessages(data.qa_count > 0
+        ? [{ role: 'ai', text: `Restored session from ${doc.name || 'previous upload'}.` }]
+        : []);
+      setResult(null);
+      setGenerating(false);
+      setLivePaper('');
+      setStep(data.ready ? (data.has_paper ? 3 : 2) : 1);
+    } catch (e) {
+      setError('Could not restore session — it may have expired.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const currentDocInfo = files.length ? {
-    name: files.length === 1 ? files[0].name : `${files.length} files`,
-    size: files.reduce((s, f) => s + f.size, 0),
-    lastModified: files[0].lastModified,
+  const currentDocInfo = (files.length || (sessionId && analysis)) ? {
+    name: files.length ? (files.length === 1 ? files[0].name : `${files.length} files`) : (analysis?.title || 'Session'),
+    size: files.length ? files.reduce((s, f) => s + f.size, 0) : 0,
+    lastModified: files.length ? files[0].lastModified : Date.now(),
     sections: analysis?.present_sections?.length || 0,
     qaCount: messages.filter(m => m.role === 'user').length,
   } : null;

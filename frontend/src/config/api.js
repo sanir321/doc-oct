@@ -27,5 +27,11 @@ export const apiService = {
 
   getDownloadUrl(sessionId, fmt="html") {
     return `${BASE}/api/download/${sessionId}/${fmt}`;
+  },
+
+  async getSession(sessionId) {
+    const res = await fetch(`${BASE}/api/session/${sessionId}`);
+    if (!res.ok) throw new Error("Session not found");
+    return res.json();
   }
 };
