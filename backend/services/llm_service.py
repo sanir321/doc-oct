@@ -45,14 +45,38 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items() if not q.startswith("_")]) if answers else "No answers yet."
     qa_text = "\n".join([f"- {q}" for q in questions_asked]) if questions_asked else "None"
 
-    authors_missing = analysis and not analysis.get("authors")
-    if authors_missing and not any("author" in q.lower() for q in questions_asked):
+    title_val = (analysis or {}).get("title", "")
+    authors_val = (analysis or {}).get("authors") or []
+
+    needs_title_confirm = title_val and title_val != "Unknown" and not answers.get("_title_ok") and not answers.get("_title_correct")
+    needs_authors_confirm = not answers.get("_authors_ok")
+
+    if needs_title_confirm:
         return {
             "ready": False,
-            "question": "Please provide the full name(s) of the author(s) for this paper. Separate multiple names with semicolons.",
-            "options": ["John Smith", "John Smith; Jane Doe"],
-            "context": "Author names are needed for the IEEE paper byline.",
-            "type": "authors"
+            "question": f"The extracted paper title is: \"{title_val}\". Is this correct?",
+            "options": ["Yes, correct", "No, let me type the correct title"],
+            "context": "The title appears at the top of the paper.",
+            "type": "title_confirm"
+        }
+
+    if not authors_val or all(a == "Author A" or a == "Author B" for a in authors_val):
+        if not any("author" in q.lower() for q in questions_asked):
+            return {
+                "ready": False,
+                "question": "Please provide the full name(s) of the author(s) for this paper. Separate multiple names with semicolons.",
+                "options": ["John Smith", "John Smith; Jane Doe"],
+                "context": "Author names are needed for the IEEE paper byline.",
+                "type": "authors"
+            }
+    elif needs_authors_confirm:
+        names_str = "; ".join(authors_val)
+        return {
+            "ready": False,
+            "question": f"Are these authors correct: {names_str}?",
+            "options": ["Yes, correct", "No, let me type the correct names"],
+            "context": "Author names appear in the paper byline.",
+            "type": "authors_confirm"
         }
 
     prompt = f"""Based on the uploaded document and previous answers, check if enough info exists to write a complete IEEE research paper.

@@ -166,6 +166,8 @@ async def upload_file(file: UploadFile = File(...)):
         if not q_result.get("ready"):
             question = q_result
 
+    if question and session_id in sessions:
+        sessions[session_id]["_last_qtype"] = question.get("type", "")
     return {"session_id": session_id, "analysis": analysis, "question": question}
 
 @app.post("/api/ask/{session_id}")
@@ -179,6 +181,7 @@ async def ask_question(session_id: str):
         s["ready"] = True
         return {"ready": True}
 
+    s["_last_qtype"] = q_result.get("type", "")
     return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", "")}
 
 @app.post("/api/answer/{session_id}")
@@ -192,10 +195,36 @@ async def submit_answer(session_id: str, data: dict):
     s["answers"][question] = answer
     s["questions_asked"].append(question)
 
-    if "author" in question.lower() and "name" in question.lower():
+    qtype = s.get("_last_qtype", "")
+
+    if qtype in ("authors", "authors_confirm_no"):
         names = [n.strip() for n in answer.replace(",", ";").split(";") if n.strip()]
         if names:
             s["analysis"]["authors"] = names
+        s["answers"]["_authors_ok"] = True
+    elif qtype == "authors_confirm":
+        if answer.lower().startswith("y"):
+            s["answers"]["_authors_ok"] = True
+        else:
+            s["_last_qtype"] = "authors_confirm_no"
+            return {
+                "question": "Please type the correct author name(s), separated by semicolons.",
+                "options": ["John Smith", "John Smith; Jane Doe"],
+                "context": "Correct names for the paper byline.",
+                "type": "authors_confirm_no"
+            }
+    elif qtype in ("title_confirm", "title_correct"):
+        if qtype == "title_confirm" and not answer.lower().startswith("y"):
+            s["_last_qtype"] = "title_correct"
+            return {
+                "question": "Please type the correct paper title.",
+                "options": [s["analysis"].get("title", "")],
+                "context": "The title at the top of the paper.",
+                "type": "title_correct"
+            }
+        if qtype == "title_correct" and answer.strip():
+            s["analysis"]["title"] = answer.strip()
+        s["answers"]["_title_ok"] = True
 
     clarity = check_answer_clear(s["file_text"], question, answer)
     if not clarity.get("clear"):
@@ -206,6 +235,7 @@ async def submit_answer(session_id: str, data: dict):
         s["ready"] = True
         return {"ready": True}
 
+    s["_last_qtype"] = q_result.get("type", "")
     return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", "")}
 
 def strip_reasoning(text):
