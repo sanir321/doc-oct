@@ -340,7 +340,7 @@ async def download(session_id: str, fmt: str):
                 safe = line.encode('ascii', 'replace').decode('ascii')
                 pdf.multi_cell(w, 5.5, safe, new_x="LMARGIN", new_y="NEXT")
             if is_bold: pdf.ln(2)
-        pdf_bytes = pdf.output()
+        pdf_bytes = bytes(pdf.output())
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={base}.pdf"})
     raise HTTPException(404, "Format not found")
