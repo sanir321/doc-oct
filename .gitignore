@@ -16,3 +16,6 @@ uploads/
 *.db
 dist/
 build/
+test_*
+sample_*
+*.pdf
