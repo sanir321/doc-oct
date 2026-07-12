@@ -303,9 +303,9 @@ async def download(session_id: str, fmt: str):
                         headers={"Content-Disposition": f"attachment; filename={base}.tex"})
     if fmt == "pdf" and s.get("html_content"):
         from fpdf import FPDF
+        import re
         html = s["html_content"]
 
-        import re
         def extract_section(regex, html, group=1):
             m = re.search(regex, html, re.DOTALL)
             return m.group(group).strip() if m else ""
@@ -319,80 +319,75 @@ async def download(session_id: str, fmt: str):
         sections_raw = re.findall(r'<h2>(.*?)</h2>\s*<p>(.*?)</p>', html, re.DOTALL)
         sections = [(re.sub(r'<[^>]+>', '', t).strip(), re.sub(r'<[^>]+>', '', c).strip().replace('<br>', '\n')) for t, c in sections_raw]
 
-        refs_text = ""
-        refs_match = re.search(r'class="references">(.*?)(</div>|$)', html, re.DOTALL)
-        if refs_match:
-            refs_text = re.sub(r'<[^>]+>', '', refs_match.group(1)).strip()
-
         def ascii_safe(t):
             return t.replace('\u2014', '--').replace('\u2013', '-').replace('\u2018', "'").replace('\u2019', "'").replace('\u201c', '"').replace('\u201d', '"').encode('ascii', 'replace').decode('ascii')
         title, abstract, keywords = ascii_safe(title), ascii_safe(abstract), ascii_safe(keywords)
         sections = [(ascii_safe(t), ascii_safe(c)) for t, c in sections]
 
-        pdf = FPDF()
+        pdf = FPDF(orientation="P", unit="mm", format="A4")
         pdf.set_auto_page_break(auto=False)
         lm, tm, rm = 18, 15, 18
-        pdf.set_margins(lm, tm, rm)
-        col_w = (210 - lm - rm - 6) / 2
+        pw = 210
+        col_w = (pw - lm - rm - 6) / 2
         gutter = 6
-        page_h = 297
+        bh = 297 - 18
 
-        def add_title_block():
-            pdf.add_page()
+        def write_title_block():
             pdf.set_font("Times", "B", 24)
-            pdf.multi_cell(210 - lm - rm, 10, title, align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.multi_cell(pw - lm - rm, 10, title, align="C", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(4)
-
             if abstract:
                 pdf.set_font("Times", "BI", 10)
-                pdf.multi_cell(210 - lm - rm, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+                pdf.multi_cell(pw - lm - rm, 5, f"Abstract -- {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(2)
-
             if keywords:
                 pdf.set_font("Times", "I", 10)
-                pdf.multi_cell(210 - lm - rm, 5, f"Index Terms -- {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
+                pdf.multi_cell(pw - lm - rm, 5, f"Index Terms -- {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(4)
-
-            return pdf.get_y()
-
-        col_top = add_title_block()
-        col_bottom = page_h - 18
-
-        def col_text(col, text, font_style="", size=10):
-            x = lm + (col_w + gutter) * col
-            pdf.set_xy(x, col_top)
-            pdf.set_font("Times", font_style, size)
-            pdf.multi_cell(col_w, 5, text, align="J", new_x="LMARGIN", new_y="NEXT")
             return pdf.get_y()
 
         col = 0
-        pdf.set_xy(lm, col_top)
+        cy = 0
+        first_page = True
+
+        def ensure_space(h):
+            nonlocal col, cy, first_page
+            need = cy + h
+            if need > bh:
+                if col == 0:
+                    col = 1
+                    cy = tm
+                    pdf.set_xy(lm + col_w + gutter, cy)
+                else:
+                    pdf.add_page()
+                    first_page = False
+                    col = 0
+                    cy = tm
+                    pdf.set_xy(lm, cy)
+
+        pdf.add_page()
+        cy = write_title_block()
 
         for sec_title, sec_content in sections:
-            is_ref = "reference" in sec_title.lower()
-            for line in (sec_title, sec_content):
-                if not line.strip():
+            ensure_space(8)
+            pdf.set_font("Times", "B", 10)
+            pdf.set_xy(lm + (col_w + gutter) * col, cy)
+            pdf.multi_cell(col_w, 5.5, sec_title, align="J", new_x="LMARGIN", new_y="NEXT")
+            cy = pdf.get_y()
+            pdf.ln(1)
+            cy = pdf.get_y()
+
+            for para in sec_content.split('\n'):
+                para = para.strip()
+                if not para:
                     continue
-                x = lm + (col_w + gutter) * col
-                y = pdf.get_y()
-
-                if y > col_bottom:
-                    col = 1 if col == 0 else 0
-                    if col == 0:
-                        col_top = add_title_block()
-                    pdf.set_xy(lm + (col_w + gutter) * col, col_top)
-                    y = col_top
-
-                pdf.set_xy(x, y)
-                if line == sec_title:
-                    pdf.set_font("Times", "B", 10)
-                    pdf.set_char_spacing(0.5)
-                    pdf.multi_cell(col_w, 5.5, line, align="J", new_x="LMARGIN", new_y="NEXT")
-                    pdf.ln(1)
-                else:
-                    pdf.set_font("Times", "", 10)
-                    pdf.multi_cell(col_w, 5.5, line, align="J", new_x="LMARGIN", new_y="NEXT")
-                    pdf.ln(1)
+                ensure_space(6)
+                pdf.set_font("Times", "", 10)
+                pdf.set_xy(lm + (col_w + gutter) * col, cy)
+                pdf.multi_cell(col_w, 5.5, para, align="J", new_x="LMARGIN", new_y="NEXT")
+                cy = pdf.get_y()
+                pdf.ln(1)
+                cy = pdf.get_y()
 
         pdf_bytes = bytes(pdf.output())
         return Response(content=pdf_bytes, media_type="application/pdf",
