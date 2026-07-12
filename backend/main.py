@@ -302,45 +302,8 @@ async def download(session_id: str, fmt: str):
         return Response(content=s["latex_content"], media_type="text/plain",
                         headers={"Content-Disposition": f"attachment; filename={base}.tex"})
     if fmt == "pdf" and s.get("html_content"):
-        from fpdf import FPDF
-        import re, os
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=18)
-        pdf.set_margins(18, 15, 18)
-        pdf.add_page()
-        unifont = None
-        for attempt, bold_attempt in [
-            (r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\timesbd.ttf"),
-            ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf"),
-            ("/usr/share/fonts/TimesNewRoman.ttf", "/usr/share/fonts/TimesNewRomanBold.ttf"),
-        ]:
-            if os.path.exists(attempt) and os.path.exists(bold_attempt):
-                pdf.add_font("TNR", "", attempt)
-                pdf.add_font("TNR", "B", bold_attempt)
-                unifont = "TNR"
-                break
-        html = s["html_content"]
-        text = re.sub(r'<style>.*?</style>', '', html, flags=re.DOTALL)
-        text = re.sub(r'<[^>]+>', '', text)
-        text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
-        text = text.replace('&quot;', '"').replace('&#39;', "'")
-        text = text.replace('\u2014', '--').replace('\u2013', '-')
-        text = text.replace('\u2018', "'").replace('\u2019', "'")
-        text = text.replace('\u201c', '"').replace('\u201d', '"')
-        lines = [l.strip() for l in text.split('\n') if l.strip()]
-        w = pdf.epw
-        for line in lines:
-            is_bold = any(h in line.lower() for h in ['abstract', 'introduction', 'methodology', 'conclusion', 'references', 'keywords'])
-            font = unifont or "Times"
-            style = "B" if is_bold else ""
-            pdf.set_font(font, style, 11)
-            try:
-                pdf.multi_cell(w, 5.5, line, new_x="LMARGIN", new_y="NEXT")
-            except Exception:
-                safe = line.encode('ascii', 'replace').decode('ascii')
-                pdf.multi_cell(w, 5.5, safe, new_x="LMARGIN", new_y="NEXT")
-            if is_bold: pdf.ln(2)
-        pdf_bytes = bytes(pdf.output())
+        from weasyprint import HTML
+        pdf_bytes = HTML(string=s["html_content"]).write_pdf()
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={base}.pdf"})
     raise HTTPException(404, "Format not found")
