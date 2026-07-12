@@ -338,7 +338,19 @@ def parse_paper_text(paper_text, analysis, session_id):
     current_title = None
     current_content = []
 
-    for line in paper_text.split("\n"):
+    lines = paper_text.split("\n")
+    md_title = None
+    start_idx = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if re.match(r'^#\s+\S', stripped) and not stripped.startswith("##"):
+            md_title = stripped.lstrip("#").strip()
+            start_idx = i + 1
+        break
+
+    for line in lines[start_idx:]:
         stripped = line.strip()
         if not stripped or stripped.startswith("```") or stripped.startswith("==="):
             continue
@@ -358,6 +370,8 @@ def parse_paper_text(paper_text, analysis, session_id):
         sections.append({"title": current_title, "content": "\n".join(current_content).strip()})
     else:
         abstract = "\n".join(current_content).strip()
+
+    title = md_title or analysis.get("title", "Research Paper")
 
     abstract_section = None
     other_sections = []
@@ -396,7 +410,7 @@ def parse_paper_text(paper_text, analysis, session_id):
         ]
 
     html_content = generate_ieee_html(
-        title=analysis.get("title", "Research Paper"),
+        title=title,
         authors=authors_data,
         abstract=abstract_section or abstract or paper_text[:500],
         sections=other_sections,
@@ -405,7 +419,7 @@ def parse_paper_text(paper_text, analysis, session_id):
         references=refs
     )
     paper_json = {
-        "title": analysis.get("title", "Research Paper"),
+        "title": title,
         "authors": authors_data,
         "abstract": abstract_section or abstract or "",
         "keywords": analysis.get("keywords", [analysis.get("domain", "Technology")]),
@@ -687,9 +701,10 @@ async def edit_paper_endpoint(session_id: str, data: dict):
     current = s.get("paper_text") or ""
     if not current:
         raise HTTPException(400, "No paper to edit yet")
-    edited = edit_paper(current, instruction)
+    edited = edit_paper(current, instruction, s["analysis"].get("title", ""))
     s["paper_text"] = edited
     result = parse_paper_text(edited, s["analysis"], session_id)
+    s["analysis"]["title"] = result["paper_json"].get("title", s["analysis"].get("title"))
     s["html_content"] = result["html_content"]
     s["paper_json"] = result.get("paper_json")
     return result

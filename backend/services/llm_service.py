@@ -180,15 +180,20 @@ If unclear (rare): {{"clear": false, "follow_up": "A simple clarifying question 
     ])
 
 
-def edit_paper(paper_text: str, instruction: str) -> str:
+def edit_paper(paper_text: str, instruction: str, current_title: str = "") -> str:
     prompt = f"""You are editing an IEEE-format research paper based on the user's instruction.
+
+CURRENT TITLE: {current_title or "(unknown)"}
 
 CURRENT PAPER:
 {paper_text}
 
 INSTRUCTION: {instruction}
 
-Rewrite the COMPLETE paper applying the instruction. Strictly preserve the existing ##-prefixed section structure of the CURRENT PAPER — only include the sections that are already present, in their current order. Do NOT invent or add new sections (such as Literature Review, Methodology, Results, Limitations, or About the Authors) unless the instruction explicitly asks for them. Preserve all unchanged content verbatim. Do NOT invent numerical results, statistics, or metrics not already present. Never include reasoning, chain-of-thought, or commentary — output only the revised paper."""
+Rewrite the COMPLETE paper applying the instruction. Strictly preserve the existing ##-prefixed section structure of the CURRENT PAPER — only include the sections that are already present, in their current order. Do NOT invent or add new sections (such as Literature Review, Methodology, Results, Limitations, or About the Authors) unless the instruction explicitly asks for them. Preserve all unchanged content verbatim. Do NOT invent numerical results, statistics, or metrics not already present.
+If the instruction changes the paper title, output the new title as the VERY FIRST LINE in the exact format: # New Title
+Otherwise, do not include any top-level title line.
+Never include reasoning, chain-of-thought, or commentary — output only the revised paper."""
     messages = [
         {"role": "system", "content": "You edit IEEE-format research papers using only ##-prefixed section headings. Output only the paper, never reasoning or commentary. Never add sections that aren't in the current paper."},
         {"role": "user", "content": prompt}
