@@ -41,9 +41,20 @@ Document content:
         {"role": "user", "content": prompt}
     ])
 
-def generate_question(file_text: str, answers: dict, questions_asked: list) -> dict:
-    answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items()]) if answers else "No answers yet."
+def generate_question(file_text: str, answers: dict, questions_asked: list, analysis: dict = None) -> dict:
+    answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items() if not q.startswith("_")]) if answers else "No answers yet."
     qa_text = "\n".join([f"- {q}" for q in questions_asked]) if questions_asked else "None"
+
+    authors_missing = analysis and not analysis.get("authors")
+    if authors_missing and not any("author" in q.lower() for q in questions_asked):
+        return {
+            "ready": False,
+            "question": "Please provide the full name(s) of the author(s) for this paper. Separate multiple names with semicolons.",
+            "options": ["John Smith", "John Smith; Jane Doe"],
+            "context": "Author names are needed for the IEEE paper byline.",
+            "type": "authors"
+        }
+
     prompt = f"""Based on the uploaded document and previous answers, check if enough info exists to write a complete IEEE research paper.
 
 Questions already asked: {qa_text}

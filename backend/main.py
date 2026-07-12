@@ -162,7 +162,7 @@ async def upload_file(file: UploadFile = File(...)):
 
     question = None
     if not analysis.get("ready", False):
-        q_result = generate_question(text, {}, [])
+        q_result = generate_question(text, {}, [], analysis)
         if not q_result.get("ready"):
             question = q_result
 
@@ -174,7 +174,7 @@ async def ask_question(session_id: str):
     if not s:
         raise HTTPException(404, "Session not found")
 
-    q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"])
+    q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"], s.get("analysis"))
     if q_result.get("ready"):
         s["ready"] = True
         return {"ready": True}
@@ -192,11 +192,16 @@ async def submit_answer(session_id: str, data: dict):
     s["answers"][question] = answer
     s["questions_asked"].append(question)
 
+    if "author" in question.lower() and "name" in question.lower():
+        names = [n.strip() for n in answer.replace(",", ";").split(";") if n.strip()]
+        if names:
+            s["analysis"]["authors"] = names
+
     clarity = check_answer_clear(s["file_text"], question, answer)
     if not clarity.get("clear"):
         return {"follow_up": clarity["follow_up"], "options": clarity.get("options", []), "needs_clarification": True}
 
-    q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"])
+    q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"], s.get("analysis"))
     if q_result.get("ready"):
         s["ready"] = True
         return {"ready": True}
