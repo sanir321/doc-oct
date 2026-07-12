@@ -182,7 +182,7 @@ async def ask_question(session_id: str):
         return {"ready": True}
 
     s["_last_qtype"] = q_result.get("type", "")
-    return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", "")}
+    return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", ""), "type": q_result.get("type", "")}
 
 @app.post("/api/answer/{session_id}")
 async def submit_answer(session_id: str, data: dict):
@@ -236,7 +236,7 @@ async def submit_answer(session_id: str, data: dict):
         return {"ready": True}
 
     s["_last_qtype"] = q_result.get("type", "")
-    return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", "")}
+    return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", ""), "type": q_result.get("type", "")}
 
 def strip_reasoning(text):
     lines = text.split("\n")
