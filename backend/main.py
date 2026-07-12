@@ -324,6 +324,11 @@ async def download(session_id: str, fmt: str):
         if refs_match:
             refs_text = re.sub(r'<[^>]+>', '', refs_match.group(1)).strip()
 
+        def ascii_safe(t):
+            return t.replace('\u2014', '--').replace('\u2013', '-').replace('\u2018', "'").replace('\u2019', "'").replace('\u201c', '"').replace('\u201d', '"').encode('ascii', 'replace').decode('ascii')
+        title, abstract, keywords = ascii_safe(title), ascii_safe(abstract), ascii_safe(keywords)
+        sections = [(ascii_safe(t), ascii_safe(c)) for t, c in sections]
+
         pdf = FPDF()
         pdf.set_auto_page_break(auto=False)
         lm, tm, rm = 18, 15, 18
