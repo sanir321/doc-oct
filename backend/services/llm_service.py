@@ -42,7 +42,8 @@ Document content:
     ])
 
 def generate_question(file_text: str, answers: dict, questions_asked: list, analysis: dict = None) -> dict:
-    answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items() if not q.startswith("_")]) if answers else "No answers yet."
+    str_answers = {k: v for k, v in answers.items() if isinstance(v, str)}
+    answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in str_answers.items() if not q.startswith("_")]) if str_answers else "No answers yet."
     qa_text = "\n".join([f"- {q}" for q in questions_asked]) if questions_asked else "None"
 
     title_val = (analysis or {}).get("title", "")
@@ -81,7 +82,7 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
 
     # Detect if user already said they have no more data
     user_said_no_more = any(
-        a.strip().lower().startswith("no") and ("more" in q.lower() or "additional" in q.lower() or "detailed" in q.lower() or "details" in q.lower() or "full" in q.lower() or "complete" in q.lower())
+        isinstance(a, str) and a.strip().lower().startswith("no") and ("more" in q.lower() or "additional" in q.lower() or "detailed" in q.lower() or "details" in q.lower() or "full" in q.lower() or "complete" in q.lower())
         for q, a in answers.items()
     )
 
