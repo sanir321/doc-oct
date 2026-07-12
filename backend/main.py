@@ -327,7 +327,7 @@ def parse_paper_text(paper_text, analysis, session_id):
             for p in parts:
                 p = p.strip()
                 if p and re.match(r'\[\d+\]', p):
-                    refs.append({"citation": p})
+                    refs.append({"citation": re.sub(r'^\[\d+\]\s*', '', p)})
             other_sections.remove(sec)
     if not refs:
         refs = [
