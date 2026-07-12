@@ -31,6 +31,13 @@ python main.py
 
 Set `OPENCODE_ZEN_API_KEY` in your environment or `backend/config.py`.
 
+## Deploy (Railway)
+
+Create two services from the same repo:
+
+**Backend** — root: `backend`, add env `OPENCODE_ZEN_API_KEY`
+**Frontend** — root: `frontend`, add env `VITE_API_BASE_URL=https://your-backend.railway.app`
+
 ## Tech Stack
 
 - **Frontend:** React, Vite, Tailwind CSS

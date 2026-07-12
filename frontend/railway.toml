@@ -1,0 +1,3 @@
+[service]
+buildCommand = "npm install && npm run build"
+startCommand = "npx serve dist -s -l $PORT"
