@@ -302,8 +302,94 @@ async def download(session_id: str, fmt: str):
         return Response(content=s["latex_content"], media_type="text/plain",
                         headers={"Content-Disposition": f"attachment; filename={base}.tex"})
     if fmt == "pdf" and s.get("html_content"):
-        from weasyprint import HTML
-        pdf_bytes = HTML(string=s["html_content"]).write_pdf()
+        from fpdf import FPDF
+        html = s["html_content"]
+
+        import re
+        def extract_section(regex, html, group=1):
+            m = re.search(regex, html, re.DOTALL)
+            return m.group(group).strip() if m else ""
+
+        title = extract_section(r"<h1>(.*?)</h1>", html)
+        abstract = extract_section(r'abstract-label">(.*?)</span>\s*<p>(.*?)</p>', html, 2)
+        keywords = extract_section(r"kw-label">.*?</span>(.*?)</div>", html)
+        abstract = re.sub(r'<[^>]+>', '', abstract)
+        keywords = re.sub(r'<[^>]+>', '', keywords)
+
+        sections_raw = re.findall(r'<h2>(.*?)</h2>\s*<p>(.*?)</p>', html, re.DOTALL)
+        sections = [(re.sub(r'<[^>]+>', '', t).strip(), re.sub(r'<[^>]+>', '', c).strip().replace('<br>', '\n')) for t, c in sections_raw]
+
+        refs_text = ""
+        refs_match = re.search(r'class="references">(.*?)(</div>|$)', html, re.DOTALL)
+        if refs_match:
+            refs_text = re.sub(r'<[^>]+>', '', refs_match.group(1)).strip()
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=False)
+        lm, tm, rm = 18, 15, 18
+        pdf.set_margins(lm, tm, rm)
+        col_w = (210 - lm - rm - 6) / 2
+        gutter = 6
+        page_h = 297
+
+        def add_title_block():
+            pdf.add_page()
+            pdf.set_font("Times", "B", 24)
+            pdf.multi_cell(210 - lm - rm, 10, title, align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(4)
+
+            if abstract:
+                pdf.set_font("Times", "BI", 10)
+                pdf.multi_cell(210 - lm - rm, 5, f"Abstract \u2014 {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(2)
+
+            if keywords:
+                pdf.set_font("Times", "I", 10)
+                pdf.multi_cell(210 - lm - rm, 5, f"Index Terms \u2014 {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(4)
+
+            return pdf.get_y()
+
+        col_top = add_title_block()
+        col_bottom = page_h - 18
+
+        def col_text(col, text, font_style="", size=10):
+            x = lm + (col_w + gutter) * col
+            pdf.set_xy(x, col_top)
+            pdf.set_font("Times", font_style, size)
+            pdf.multi_cell(col_w, 5, text, align="J", new_x="LMARGIN", new_y="NEXT")
+            return pdf.get_y()
+
+        col = 0
+        pdf.set_xy(lm, col_top)
+
+        for sec_title, sec_content in sections:
+            is_ref = "reference" in sec_title.lower()
+            for line in (sec_title, sec_content):
+                if not line.strip():
+                    continue
+                x = lm + (col_w + gutter) * col
+                y = pdf.get_y()
+
+                if y > col_bottom:
+                    col = 1 if col == 0 else 0
+                    if col == 0:
+                        col_top = add_title_block()
+                    pdf.set_xy(lm + (col_w + gutter) * col, col_top)
+                    y = col_top
+
+                pdf.set_xy(x, y)
+                if line == sec_title:
+                    pdf.set_font("Times", "B", 10)
+                    pdf.set_char_spacing(0.5)
+                    pdf.multi_cell(col_w, 5.5, line, align="J", new_x="LMARGIN", new_y="NEXT")
+                    pdf.ln(1)
+                else:
+                    pdf.set_font("Times", "", 10)
+                    pdf.multi_cell(col_w, 5.5, line, align="J", new_x="LMARGIN", new_y="NEXT")
+                    pdf.ln(1)
+
+        pdf_bytes = bytes(pdf.output())
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={base}.pdf"})
     raise HTTPException(404, "Format not found")

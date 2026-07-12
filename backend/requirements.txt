@@ -4,4 +4,4 @@ python-multipart
 httpx
 PyPDF2
 python-docx
-weasyprint
+fpdf2
