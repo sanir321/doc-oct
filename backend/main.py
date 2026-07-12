@@ -251,6 +251,10 @@ def parse_paper_text(paper_text, analysis, session_id):
         else:
             other_sections.append(sec)
 
+    if not abstract_section and other_sections:
+        intro = other_sections[0]["content"]
+        abstract_section = intro[:400] + "..."
+
     authors_data = []
     for i, author in enumerate(analysis.get("authors", ["Author A"])):
         authors_data.append({"name": author, "affiliation": f"Department of {analysis.get('domain', 'Engineering')}"})

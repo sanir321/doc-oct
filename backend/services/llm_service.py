@@ -84,19 +84,13 @@ If unclear (rare): {{"clear": false, "follow_up": "A simple clarifying question 
 
 def generate_paper_stream(file_text: str, answers: dict, analysis: dict):
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items()]) if answers else ""
-    prompt = f"""Write a complete IEEE conference research paper based on this information.
+    prompt = f"""Write a complete IEEE conference research paper. Begin with ## Abstract and include all major sections.
 
-Uploaded document context:
-{file_text[:12000]}
+Document context: {file_text[:12000]}
 
-Additional details from author:
-{answers_text}
-
-Write the full paper content with ## section headings. Include: Abstract, Introduction, Literature Review, Methodology, Implementation, Results & Discussion, Conclusion, References.
-
-IMPORTANT: Use ONLY the facts from the uploaded document and author answers."""
+Author details: {answers_text}"""
     messages = [
-        {"role": "system", "content": "You are an IEEE research paper generator. Write the paper directly with ## section headings."},
+        {"role": "system", "content": "You are an IEEE paper generator. Start with ## Abstract. Output ONLY ##-headed sections. No explanations."},
         {"role": "user", "content": prompt}
     ]
     with httpx.Client(timeout=300) as client:
