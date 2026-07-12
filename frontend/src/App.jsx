@@ -129,7 +129,6 @@ export default function App() {
             Research Paper AI
           </span>
           <div className="flex items-center gap-4">
-            <span className="text-muted-soft text-xs font-mono hidden sm:block">v1.0</span>
             <button onClick={handleGetStarted}
               className="text-sm font-medium rounded-md px-[18px] py-[10px] bg-primary text-on-primary transition-opacity hover:opacity-90">
               Get Started
