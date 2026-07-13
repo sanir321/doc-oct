@@ -98,23 +98,7 @@ export default function PaperWizard({ onNewSession }) {
       setSessionId(data.session_id);
       setAnalysis(data.analysis);
       goStep(1);
-      if (data.question && !data.analysis.ready) {
-        setQuestion(data.question);
-        setAiTyping(true);
-        setTimeout(() => {
-          setAiTyping(false);
-          setMessages([{ role: 'ai', text: `I've analyzed "${file.name}". Let me ask a few questions.\n\n${data.question.question}` }]);
-          goStep(2);
-        }, 600);
-      } else {
-        setAiTyping(true);
-        setTimeout(() => {
-          setAiTyping(false);
-          setMessages([{ role: 'ai', text: `I've analyzed "${file.name}". The analysis is clear enough to generate a paper!` }]);
-          setReady(true);
-        }, 600);
-      }
-    } catch (e) { setError(e.message); setLoading(false); }
+    } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
 
