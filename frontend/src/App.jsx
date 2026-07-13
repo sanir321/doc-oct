@@ -3,28 +3,36 @@ import LogoMark from './components/LogoMark';
 
 const FEATURES = [
   {
-    title: 'Upload Any File',
+    title: 'Two Modes — Paper or Resume',
+    desc: 'Upload once, pick your mode. Generate a full IEEE paper or a professional resume from the same document.',
+  },
+  {
+    title: 'AI Interview',
+    desc: 'AI detects gaps and asks targeted questions before generating — ensures nothing is missed.',
+  },
+  {
+    title: 'IEEE Paper Generator',
+    desc: 'Well-structured papers following IEEE conference guidelines. PDF & HTML export.',
+  },
+  {
+    title: 'AI Resume Builder',
+    desc: 'Extracts experience, skills, and education. Formats a professional resume with download + AI editing.',
+  },
+  {
+    title: 'Smart Editor',
+    desc: 'Edit any section manually or ask the AI to rewrite, expand, or fix tone — all in the same view.',
+  },
+  {
+    title: 'Upload Anything',
     desc: 'PDF, DOCX, images, code, Markdown, LaTeX — AI extracts & analyzes all content.',
-  },
-  {
-    title: 'AI-Powered Interview',
-    desc: 'Our AI identifies gaps in your document and asks targeted questions before generation.',
-  },
-  {
-    title: 'IEEE-Format Output',
-    desc: 'Generates well-structured academic papers following IEEE conference guidelines.',
-  },
-  {
-    title: 'LaTeX & HTML Export',
-    desc: 'Download HTML for instant print-to-PDF or PDF directly from your browser.',
   },
 ];
 
 const STEPS = [
-  { num: '01', title: 'Upload', desc: 'Upload your research notes, draft, or reference documents.' },
-  { num: '02', title: 'Analysis', desc: 'AI analyzes your content and detects missing sections.' },
-  { num: '03', title: 'Interview', desc: 'Answer clarifying questions to fill in the gaps.' },
-  { num: '04', title: 'Generate', desc: 'Get a complete IEEE-format paper ready for submission.' },
+  { num: '01', title: 'Upload', desc: 'Upload any file — research notes, draft, or reference documents.' },
+  { num: '02', title: 'Pick Mode', desc: 'Choose your output — IEEE research paper or professional resume.' },
+  { num: '03', title: 'AI Interview', desc: 'Answer clarifying questions to fill in the gaps.' },
+  { num: '04', title: 'Generate', desc: 'Get your formatted paper or resume. Download, edit, or regenerate.' },
 ];
 
 export default function App() {
@@ -37,7 +45,7 @@ export default function App() {
         <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
           <span className="text-ink text-sm font-medium flex items-center gap-2">
             <LogoMark size={16} />
-            Research Paper AI
+            PaperAI
           </span>
           <div className="flex items-center gap-4">
             <button onClick={() => navigate('/generate')}
@@ -56,18 +64,19 @@ export default function App() {
         <div className="inline-flex items-center gap-2 rounded-full px-[10px] py-[4px] mb-10 bg-surface-card">
           <span className="w-1.5 h-1.5 rounded-full bg-accent-teal" />
           <span className="text-[11px] font-semibold tracking-[0.88px] uppercase text-muted">
-            AI-Powered Academic Writing
+            AI-Powered Generation
           </span>
         </div>
 
         <h1 className="font-display text-5xl md:text-6xl font-normal leading-[1.05] mb-6 text-ink"
           style={{ letterSpacing: '-1.5px' }}>
-          Upload your notes.<br />
-          AI writes the paper.
+          Upload once.<br />
+          Paper or resume.
         </h1>
 
-        <p className="text-body text-base max-w-2xl mx-auto mb-10 leading-relaxed">
-          Drop any file — PDF, DOCX, images, code, or plain text. AI extracts everything, interviews you on gaps, and outputs a complete IEEE-formatted paper.
+        <p className="text-body text-base max-w-xl mx-auto mb-10 leading-relaxed">
+          Upload any document — AI extracts everything, interviews you on gaps, then generates either an
+          IEEE-formatted research paper or a professional resume. Two modes, one upload.
         </p>
 
         <div className="flex flex-wrap justify-center gap-4">
@@ -84,7 +93,7 @@ export default function App() {
 
         {/* Tech badges */}
         <div className="flex flex-wrap justify-center gap-2 mt-12 pt-10 border-t border-hairline">
-          {['PDF', 'DOCX', 'Images', 'Code', 'Markdown', 'LaTeX', 'CSV', 'HTML'].map(b => (
+          {['PDF', 'DOCX', 'Images', 'TXT', 'LaTeX', 'Code', 'CSV', 'HTML'].map(b => (
             <span key={b} className="rounded-full px-[10px] py-[4px] text-[11px] font-semibold tracking-[0.88px] uppercase bg-surface-card text-ink">
               {b}
             </span>
@@ -104,7 +113,7 @@ export default function App() {
               Why use this tool?
             </h2>
             <p className="mt-3 text-muted max-w-md mx-auto">
-              Everything you need to go from idea to formatted paper
+              Everything you need — whether you're writing a paper or a résumé
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -153,10 +162,10 @@ export default function App() {
         <div className="text-center rounded-xl p-8 md:p-16 bg-primary">
           <h2 className="font-display text-3xl font-normal leading-[1.15] mb-3 text-white"
             style={{ letterSpacing: '-0.5px' }}>
-            Ready to generate your paper?
+            Ready to generate?
           </h2>
           <p className="mb-8 max-w-md mx-auto" style={{ color: 'rgba(255,255,255,0.8)' }}>
-            Upload your research document and let AI do the heavy lifting.
+            Upload a document and pick your mode — paper or resume. AI does the rest.
           </p>
           <button onClick={() => navigate('/generate')}
             className="text-sm font-medium rounded-md px-[18px] py-[10px] bg-white text-ink transition-opacity hover:opacity-90">
@@ -170,9 +179,11 @@ export default function App() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-sm text-on-dark-soft flex items-center gap-2">
             <LogoMark size={14} />
-            Research Paper AI
+            PaperAI
           </span>
-          <span className="text-xs font-mono text-on-dark-soft">AI-powered academic writing assistant</span>
+          <span className="text-xs font-mono text-on-dark-soft">
+            AI-powered paper & résumé generator
+          </span>
         </div>
       </footer>
     </div>
