@@ -615,6 +615,21 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     # --- Body (two columns) ---
     for sec_title, sec_content, tables in sections:
         size, line_h = 10, 12
+        # Estimate header height before drawing
+        words = sec_title.split()
+        test_lines, cur_w = [], 0
+        sp = pdf.get_string_width(" ")
+        for word in words:
+            ww = pdf.get_string_width(word.upper())
+            if test_lines and cur_w + sp + ww > col_w:
+                test_lines.append(cur_w)
+                cur_w = ww
+            else:
+                cur_w += (sp if test_lines else 0) + ww
+        if cur_w:
+            test_lines.append(cur_w)
+        hdr_h = max(len(test_lines), 1) * line_h + 4
+        ensure(hdr_h)
         n_lines = draw_smallcaps(col_x[state["col"]], state["y"], col_w, sec_title, size, line_h, "C")
         state["y"] += n_lines * line_h + 2
 
@@ -845,26 +860,30 @@ def parse_resume_text(resume_text: str) -> dict:
     return result
 
 
-def generate_resume_pdf(html_content: str) -> bytes:
-    """Generate a single-column resume PDF from HTML."""
+def generate_resume_pdf(resume_data: dict) -> bytes:
+    """Generate a single-column resume PDF directly from resume_data dict."""
     from fpdf import FPDF
 
     def ascii_safe(t):
+        if not isinstance(t, str):
+            t = str(t)
         t = t.replace('\u2014', '--').replace('\u2013', '-')
         t = t.replace('\u2018', "'").replace('\u2019', "'")
         t = t.replace('\u201c', '"').replace('\u201d', '"')
         t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
         t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
+        t = t.replace('\u2022', '-').replace('\u2023', '-')
         return t.encode('ascii', 'replace').decode('ascii')
 
-    # Extract data from HTML
-    def extract(regex, html, group=1):
-        m = re.search(regex, html, re.DOTALL)
-        return ascii_safe(m.group(group).strip()) if m else ""
-
-    name = extract(r'class="name">(.*?)</div>', html_content)
-    contact = extract(r'class="contact">(.*?)</div>', html_content)
-    sections_raw = re.findall(r'<div class="section">(.*?)</div>\s*(?=<div class="section">|$)', html_content, re.DOTALL)
+    name = ascii_safe(resume_data.get("name", "Resume"))
+    email = ascii_safe(resume_data.get("email", ""))
+    phone = ascii_safe(resume_data.get("phone", ""))
+    summary = ascii_safe(resume_data.get("summary", ""))
+    education = resume_data.get("education", [])
+    experience = resume_data.get("experience", [])
+    skills = resume_data.get("skills", [])
+    projects = resume_data.get("projects", [])
+    certifications = resume_data.get("certifications", [])
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -873,102 +892,150 @@ def generate_resume_pdf(html_content: str) -> bytes:
     pw = 210
     content_w = pw - ml - mr
 
-    # Header
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.set_xy(ml, 20)
-    pdf.cell(content_w, 10, name, align="C", new_x="LMARGIN", new_y="NEXT")
-
-    if contact:
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_xy(ml, pdf.get_y() + 2)
-        pdf.cell(content_w, 5, contact, align="C", new_x="LMARGIN", new_y="NEXT")
-
-    pdf.ln(3)
-    # Divider line
-    pdf.set_draw_color(44, 62, 80)
-    pdf.set_line_width(0.5)
-    pdf.line(ml, pdf.get_y(), ml + content_w, pdf.get_y())
-    pdf.ln(6)
-
-    # Sections
-    for section_html in sections_raw:
-        # Section title
-        sec_title_m = re.search(r'class="section-title">(.*?)</div>', section_html)
-        if not sec_title_m:
-            continue
-        sec_title = ascii_safe(sec_title_m.group(1).strip())
-
+    def section_header(title):
         pdf.set_font("Helvetica", "B", 11)
         pdf.set_text_color(44, 62, 80)
-        pdf.cell(content_w, 7, sec_title.upper(), new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(content_w, 7, ascii_safe(title.upper()), new_x="LMARGIN", new_y="NEXT")
         pdf.set_draw_color(189, 195, 199)
         pdf.set_line_width(0.3)
         pdf.line(ml, pdf.get_y(), ml + content_w, pdf.get_y())
         pdf.ln(3)
         pdf.set_text_color(51, 51, 51)
 
-        # Items
-        items = re.findall(r'<div class="item">(.*?)</div>', section_html, re.DOTALL)
-        if not items:
-            # Summary or plain text
-            text = re.sub(r'<[^>]+>', '', section_html)
-            text = ascii_safe(text.strip())
-            if text:
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_x(ml)
-                pdf.multi_cell(content_w, 5, text, new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(2)
-            continue
+    # Header
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.set_xy(ml, 20)
+    pdf.cell(content_w, 10, name, align="C", new_x="LMARGIN", new_y="NEXT")
 
-        for item_html in items:
-            title = extract(r'class="item-title">(.*?)</div>', item_html)
-            subtitle = extract(r'class="item-subtitle">(.*?)</div>', item_html)
-            date = extract(r'class="item-date">(.*?)</div>', item_html)
-            bullets = re.findall(r'<p>(.*?)</p>', item_html)
+    contact_parts = [p for p in [email, phone] if p]
+    if contact_parts:
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_xy(ml, pdf.get_y() + 2)
+        pdf.cell(content_w, 5, "  |  ".join(contact_parts), align="C", new_x="LMARGIN", new_y="NEXT")
 
-            if title:
-                pdf.set_font("Helvetica", "B", 10)
-                pdf.set_x(ml)
-                if date:
-                    pdf.cell(content_w - 35, 5, title, new_x="LEFT", new_y="TOP")
-                    pdf.set_font("Helvetica", "I", 9)
-                    pdf.cell(35, 5, date, align="R", new_x="LMARGIN", new_y="NEXT")
-                else:
-                    pdf.cell(content_w, 5, title, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+    pdf.set_draw_color(44, 62, 80)
+    pdf.set_line_width(0.5)
+    pdf.line(ml, pdf.get_y(), ml + content_w, pdf.get_y())
+    pdf.ln(6)
 
-            if subtitle:
-                pdf.set_font("Helvetica", "I", 9)
-                pdf.set_x(ml)
-                pdf.cell(content_w, 4, ascii_safe(subtitle), new_x="LMARGIN", new_y="NEXT")
-
-            for bullet in bullets:
-                clean = ascii_safe(re.sub(r'<[^>]+>', '', bullet).strip())
-                if clean.startswith("•") or clean.startswith("&bull;"):
-                    clean = clean.lstrip("•&bull;").strip()
-                elif clean.startswith("-"):
-                    clean = clean.lstrip("-").strip()
-                pdf.set_font("Helvetica", "", 9)
-                pdf.set_x(ml + 3)
-                pdf.multi_cell(content_w - 6, 4.5, f"• {clean}", new_x="LMARGIN", new_y="NEXT")
-
-            pdf.ln(1.5)
-
+    # Summary
+    if summary:
+        section_header("Summary")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_x(ml)
+        pdf.multi_cell(content_w, 5, ascii_safe(summary), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
-    # Skills (special handling)
-    skill_spans = re.findall(r'class="skill">(.*?)</span>', html_content)
-    if skill_spans:
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.set_text_color(44, 62, 80)
-        pdf.cell(content_w, 7, "SKILLS", new_x="LMARGIN", new_y="NEXT")
-        pdf.set_draw_color(189, 195, 199)
-        pdf.line(ml, pdf.get_y(), ml + content_w, pdf.get_y())
-        pdf.ln(3)
-        pdf.set_text_color(51, 51, 51)
+    # Education
+    if education:
+        section_header("Education")
+        for item in education:
+            if isinstance(item, dict):
+                text = ascii_safe(item.get("degree") or item.get("name") or item.get("text", ""))
+                school = ascii_safe(item.get("school", ""))
+                year = ascii_safe(item.get("year", ""))
+                if text:
+                    pdf.set_font("Helvetica", "B", 10)
+                    pdf.set_x(ml)
+                    if year:
+                        pdf.cell(content_w - 30, 5, text, new_x="LEFT", new_y="TOP")
+                        pdf.set_font("Helvetica", "I", 9)
+                        pdf.cell(30, 5, year, align="R", new_x="LMARGIN", new_y="NEXT")
+                    else:
+                        pdf.cell(content_w, 5, text, new_x="LMARGIN", new_y="NEXT")
+                if school:
+                    pdf.set_font("Helvetica", "I", 9)
+                    pdf.set_x(ml)
+                    pdf.cell(content_w, 4, school, new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.set_x(ml)
+                pdf.cell(content_w, 5, ascii_safe(str(item)), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1.5)
+        pdf.ln(2)
+
+    # Experience
+    if experience:
+        section_header("Experience")
+        for item in experience:
+            if isinstance(item, dict):
+                title = ascii_safe(item.get("role") or item.get("title", ""))
+                company = ascii_safe(item.get("company", ""))
+                dates = ascii_safe(item.get("dates", ""))
+                if title:
+                    pdf.set_font("Helvetica", "B", 10)
+                    pdf.set_x(ml)
+                    if dates:
+                        pdf.cell(content_w - 35, 5, title, new_x="LEFT", new_y="TOP")
+                        pdf.set_font("Helvetica", "I", 9)
+                        pdf.cell(35, 5, dates, align="R", new_x="LMARGIN", new_y="NEXT")
+                    else:
+                        pdf.cell(content_w, 5, title, new_x="LMARGIN", new_y="NEXT")
+                if company:
+                    pdf.set_font("Helvetica", "I", 9)
+                    pdf.set_x(ml)
+                    pdf.cell(content_w, 4, company, new_x="LMARGIN", new_y="NEXT")
+                for bullet in item.get("bullets", []):
+                    clean = ascii_safe(re.sub(r'^[\u2022\-*\s]+', '', str(bullet)).strip())
+                    if clean:
+                        pdf.set_font("Helvetica", "", 9)
+                        pdf.set_x(ml + 3)
+                        pdf.multi_cell(content_w - 6, 4.5, f"- {clean}", new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_x(ml)
+                pdf.multi_cell(content_w, 5, ascii_safe(str(item)), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1.5)
+        pdf.ln(2)
+
+    # Skills
+    if skills:
+        section_header("Skills")
         pdf.set_font("Helvetica", "", 9)
         pdf.set_x(ml)
-        skills_text = "  |  ".join(ascii_safe(s) for s in skill_spans)
+        skills_text = "  |  ".join(ascii_safe(s) for s in skills)
         pdf.multi_cell(content_w, 5, skills_text, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+
+    # Projects
+    if projects:
+        section_header("Projects")
+        for item in projects:
+            if isinstance(item, dict):
+                title = ascii_safe(item.get("title") or item.get("name", ""))
+                if title:
+                    pdf.set_font("Helvetica", "B", 10)
+                    pdf.set_x(ml)
+                    pdf.cell(content_w, 5, title, new_x="LMARGIN", new_y="NEXT")
+                for bullet in item.get("bullets", []):
+                    clean = ascii_safe(re.sub(r'^[\u2022\-*\s]+', '', str(bullet)).strip())
+                    if clean:
+                        pdf.set_font("Helvetica", "", 9)
+                        pdf.set_x(ml + 3)
+                        pdf.multi_cell(content_w - 6, 4.5, f"- {clean}", new_x="LMARGIN", new_y="NEXT")
+                desc = ascii_safe(item.get("description", ""))
+                if desc and not item.get("bullets"):
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_x(ml)
+                    pdf.multi_cell(content_w, 4.5, desc, new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_x(ml)
+                pdf.multi_cell(content_w, 5, ascii_safe(str(item)), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1.5)
+        pdf.ln(2)
+
+    # Certifications
+    if certifications:
+        section_header("Certifications")
+        for item in certifications:
+            text = ascii_safe(item.get("text", "") if isinstance(item, dict) else str(item))
+            if text:
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_x(ml)
+                pdf.cell(content_w, 5, f"- {text}", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
 
     return bytes(pdf.output())
 
@@ -1200,8 +1267,8 @@ async def download_resume(session_id: str, fmt: str):
     if fmt == "html" and s.get("resume_html"):
         return Response(content=s["resume_html"], media_type="text/html",
                         headers={"Content-Disposition": f"attachment; filename={name}_Resume.html"})
-    if fmt == "pdf" and s.get("resume_html"):
-        pdf_bytes = generate_resume_pdf(s["resume_html"])
+    if fmt == "pdf" and s.get("resume_data"):
+        pdf_bytes = generate_resume_pdf(s["resume_data"])
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={name}_Resume.pdf"})
     raise HTTPException(404, "Format not found")
