@@ -685,7 +685,8 @@ def generate_resume_html(resume_data: dict) -> str:
         elif section_name in ("Education", "Certifications"):
             for item in items:
                 if isinstance(item, dict):
-                    sections_html += f'<div class="item"><div class="item-title">{item.get("degree", item.get("name", ""))}</div>'
+                    title = item.get("degree") or item.get("name") or item.get("text", "")
+                    sections_html += f'<div class="item"><div class="item-title">{title}</div>'
                     if item.get("school"):
                         sections_html += f'<div class="item-subtitle">{item["school"]}</div>'
                     if item.get("year"):
@@ -696,7 +697,8 @@ def generate_resume_html(resume_data: dict) -> str:
         elif section_name == "Experience":
             for item in items:
                 if isinstance(item, dict):
-                    sections_html += f'<div class="item"><div class="item-header"><span class="item-title">{item.get("role", "")}</span>'
+                    title = item.get("role") or item.get("title") or ""
+                    sections_html += f'<div class="item"><div class="item-header"><span class="item-title">{title}</span>'
                     if item.get("dates"):
                         sections_html += f'<span class="item-date">{item["dates"]}</span>'
                     sections_html += '</div>'
@@ -710,9 +712,12 @@ def generate_resume_html(resume_data: dict) -> str:
         elif section_name == "Projects":
             for item in items:
                 if isinstance(item, dict):
-                    sections_html += f'<div class="item"><div class="item-title">{item.get("name", "")}</div>'
+                    title = item.get("name") or item.get("title") or ""
+                    sections_html += f'<div class="item"><div class="item-title">{title}</div>'
                     if item.get("description"):
                         sections_html += f'<p>{item["description"]}</p>'
+                    for bullet in item.get("bullets", []):
+                        sections_html += f'<p>&bull; {bullet}</p>'
                     sections_html += '</div>'
                 else:
                     sections_html += f'<div class="item"><p>{item}</p></div>'
