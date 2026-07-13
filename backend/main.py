@@ -794,36 +794,38 @@ def parse_resume_text(resume_text: str) -> dict:
         if current_section == "summary":
             result["summary"].append(stripped)
         elif current_section == "skills":
-            # Strip bullet points
+            # Strip bullet points and markdown bold markers
             clean = stripped.lstrip("- ").lstrip("* ").strip()
+            clean = clean.replace("**", "").replace("__", "").strip()
             if clean:
                 result["skills"].append(clean)
         elif current_section in ("education", "certifications"):
             if stripped.startswith("- ") or stripped.startswith("* "):
-                clean = stripped[2:].strip()
+                clean = stripped[2:].strip().replace("**", "").replace("__", "")
                 result[current_section].append({"text": clean})
             elif stripped.startswith("**") or stripped.startswith("###"):
-                clean = stripped.lstrip("#").strip().strip("*").strip()
+                clean = stripped.lstrip("#").strip().replace("**", "").replace("__", "").strip()
                 result[current_section].append({"text": clean})
             else:
-                result[current_section].append({"text": stripped})
+                result[current_section].append({"text": stripped.replace("**", "").replace("__", "")})
         elif current_section in ("experience", "projects"):
             if stripped.startswith("### ") or stripped.startswith("**"):
-                title = stripped.lstrip("#").strip().strip("*").strip()
+                title = stripped.lstrip("#").strip().replace("**", "").replace("__", "").strip()
                 current_item = {"title": title, "bullets": []}
                 result[current_section].append(current_item)
             elif stripped.startswith("- ") or stripped.startswith("* "):
-                bullet = stripped[2:].strip()
+                bullet = stripped[2:].strip().replace("**", "").replace("__", "")
                 if current_item:
                     current_item["bullets"].append(bullet)
                 else:
                     current_item = {"title": "", "bullets": [bullet]}
                     result[current_section].append(current_item)
             else:
+                clean = stripped.replace("**", "").replace("__", "")
                 if current_item:
-                    current_item["bullets"].append(stripped)
+                    current_item["bullets"].append(clean)
                 else:
-                    current_item = {"title": stripped, "bullets": []}
+                    current_item = {"title": clean, "bullets": []}
                     result[current_section].append(current_item)
 
     # Flatten summary
@@ -1034,11 +1036,9 @@ async def submit_resume_answer(session_id: str, data: dict):
     # Handle structured fields
     if qtype in ("name", "name_confirm"):
         if answer.lower().startswith("y") and s.get("resume_analysis", {}).get("name"):
-            pass  # keep analysis name
-        elif answer.lower().startswith("y") or qtype == "name":
-            pass  # keep whatever is in analysis
+            pass  # keep analysis name from confirm
         else:
-            # User typed a new name
+            # User typed a new name (or confirmed without "y" — still store it)
             name = answer.replace("Yes, that's correct", "").replace("No, I'll type my name", "").strip()
             if name:
                 s["resume_analysis"]["name"] = name
@@ -1046,9 +1046,7 @@ async def submit_resume_answer(session_id: str, data: dict):
 
     elif qtype in ("email", "email_confirm"):
         if answer.lower().startswith("y") and s.get("resume_analysis", {}).get("email"):
-            pass
-        elif answer.lower().startswith("y") or qtype == "email":
-            pass
+            pass  # keep analysis email from confirm
         else:
             email = answer.replace("Yes, that's correct", "").replace("No, I'll type a different email", "").strip()
             if email:
