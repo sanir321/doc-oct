@@ -1266,12 +1266,13 @@ async def download_resume(session_id: str, fmt: str):
     if not s:
         raise HTTPException(404, "Session not found")
 
-    name = s.get("resume_data", {}).get("name", "Resume").replace(" ", "_")
+    rd = s.get("resume_data") or {}
+    name = rd.get("name", "Resume").replace(" ", "_")
     if fmt == "html" and s.get("resume_html"):
         return Response(content=s["resume_html"], media_type="text/html",
                         headers={"Content-Disposition": f"attachment; filename={name}_Resume.html"})
-    if fmt == "pdf" and s.get("resume_data"):
-        pdf_bytes = generate_resume_pdf(s["resume_data"])
+    if fmt == "pdf" and rd:
+        pdf_bytes = generate_resume_pdf(rd)
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={name}_Resume.pdf"})
     raise HTTPException(404, "Format not found")
