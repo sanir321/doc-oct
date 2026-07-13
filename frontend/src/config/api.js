@@ -46,4 +46,44 @@ export const apiService = {
     });
   },
 
+  setMode(sessionId, mode) {
+    return req(`${BASE}/api/set-mode/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    });
+  },
+
+  askResumeQuestion(sessionId) {
+    return req(`${BASE}/api/ask-resume/${sessionId}`, { method: 'POST' });
+  },
+
+  submitResumeAnswer(sessionId, question, answer) {
+    return req(`${BASE}/api/answer-resume/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, answer }),
+    });
+  },
+
+  getResumeDownloadUrl(sessionId, fmt) {
+    return `${BASE}/api/download-resume/${sessionId}/${fmt}`;
+  },
+
+  saveResume(sessionId, resumeText) {
+    return req(`${BASE}/api/save-resume/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resume_text: resumeText }),
+    });
+  },
+
+  editResume(sessionId, instruction) {
+    return req(`${BASE}/api/edit-resume/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction }),
+    });
+  },
+
 };

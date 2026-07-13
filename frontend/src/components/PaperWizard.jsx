@@ -62,6 +62,22 @@ export default function PaperWizard({ onNewSession }) {
   const [previewKey, setPreviewKey] = useState(0);
   const [editError, setEditError] = useState('');
 
+  // Resume mode state
+  const [mode, setMode] = useState(''); // '' | 'ieee' | 'resume'
+  const [resumeQuestion, setResumeQuestion] = useState(null);
+  const [resumeMessages, setResumeMessages] = useState([]);
+  const [resumeReady, setResumeReady] = useState(false);
+  const [resumeGenerating, setResumeGenerating] = useState(false);
+  const [liveResume, setLiveResume] = useState('');
+  const [resumeResult, setResumeResult] = useState(null);
+  const [resumeEditMode, setResumeEditMode] = useState(false);
+  const [resumeEditable, setResumeEditable] = useState('');
+  const [resumeSaving, setResumeSaving] = useState(false);
+  const [resumeAiEditInput, setResumeAiEditInput] = useState('');
+  const [resumeAiEditing, setResumeAiEditing] = useState(false);
+  const [resumePreviewKey, setResumePreviewKey] = useState(0);
+  const [resumeCustomAnswer, setResumeCustomAnswer] = useState('');
+
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, aiTyping]);
 
   const goStep = useCallback((s) => {
@@ -259,10 +275,120 @@ export default function PaperWizard({ onNewSession }) {
     finally { setAiEditing(false); }
   };
 
+  // ─── Mode selection ──────────────────────────────────────────────────────
+  const handleSelectMode = async (selectedMode) => {
+    setMode(selectedMode);
+    setLoading(true); setError('');
+    try {
+      const data = await apiService.setMode(sessionId, selectedMode);
+      if (selectedMode === 'resume') {
+        if (data.ready) {
+          setResumeReady(true);
+          setResumeMessages([{ role: 'ai', text: `I've analyzed "${file.name}". Ready to generate your resume!` }]);
+        } else if (data.question) {
+          setResumeQuestion(data.question);
+          setResumeMessages([{ role: 'ai', text: `I've analyzed your document for resume content. Let me ask a few questions.\n\n${data.question.question}` }]);
+        }
+        goStep(2);
+      } else {
+        // IEEE mode — continue existing flow
+        skipInterview();
+      }
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  // ─── Resume interview ────────────────────────────────────────────────────
+  const answerResumeQuestion = async (answer) => {
+    if (!resumeQuestion || !answer.trim()) return;
+    setLoading(true);
+    setResumeQuestion(null);
+    const q = resumeQuestion.question;
+    setResumeMessages(prev => [...prev, { role: 'user', text: answer }]);
+    setAiTyping(true);
+    try {
+      const data = await apiService.submitResumeAnswer(sessionId, q, answer);
+      setResumeCustomAnswer('');
+      await new Promise(r => setTimeout(r, 700));
+      if (data.ready) {
+        setResumeReady(true); setAiTyping(false);
+        setResumeMessages(prev => [...prev, { role: 'ai', text: 'Great — I have enough information to generate your resume!' }]);
+      } else {
+        setResumeQuestion(data); setAiTyping(false);
+        setResumeMessages(prev => [...prev, { role: 'ai', text: data.question || '' }]);
+      }
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  // ─── Resume generation ───────────────────────────────────────────────────
+  const handleResumeGenerate = () => {
+    setResumeGenerating(true); setError('');
+    setLiveResume('');
+    streamDone.current = false;
+    const es = new EventSource(`${BASE}/api/generate-resume-stream/${sessionId}`);
+    es.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        if (data.type === 'token') {
+          setLiveResume(prev => prev + (data.content || '').replace(/\\n/g, '\n').replace(/\\r/g, '\r'));
+        } else if (data.type === 'error') {
+          streamDone.current = true;
+          setError(data.message || 'Generation failed');
+          setResumeGenerating(false);
+          es.close();
+        } else if (data.type === 'done') {
+          streamDone.current = true;
+          setResumeResult(data.result);
+          setStep(3);
+          setResumeGenerating(false);
+          es.close();
+        }
+      } catch (e) {}
+    };
+    es.onerror = () => {
+      if (streamDone.current) return;
+      setError('Connection lost during generation');
+      setResumeGenerating(false);
+      es.close();
+    };
+  };
+
+  // ─── Resume editing ──────────────────────────────────────────────────────
+  const enterResumeEdit = () => {
+    setResumeEditable(resumeResult.resume_text || '');
+    setEditError('');
+    setResumeEditMode(true);
+  };
+
+  const handleResumeSave = async () => {
+    setResumeSaving(true); setEditError('');
+    try {
+      const data = await apiService.saveResume(sessionId, resumeEditable);
+      setResumeResult(prev => ({ ...prev, ...data }));
+      setResumeEditMode(false);
+      setResumePreviewKey(k => k + 1);
+    } catch (e) { setEditError(e.message); }
+    finally { setResumeSaving(false); }
+  };
+
+  const handleResumeAiEdit = async () => {
+    if (!resumeAiEditInput.trim()) return;
+    setResumeAiEditing(true); setEditError('');
+    try {
+      const data = await apiService.editResume(sessionId, resumeAiEditInput);
+      setResumeResult(data);
+      setResumeEditMode(false);
+      setResumePreviewKey(k => k + 1);
+      setResumeAiEditInput('');
+    } catch (e) { setEditError(e.message); }
+    finally { setResumeAiEditing(false); }
+  };
+
   return (
     <div className="flex flex-1 min-h-0 p-3 md:p-4 gap-3 md:gap-6">
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-        <div className={`flex-1 flex flex-col max-w-5xl w-full mx-auto min-h-0 ${(result || generating) ? 'py-0 space-y-0' : 'py-6 space-y-6'}`}>
+        <div className={`flex-1 flex flex-col max-w-5xl w-full mx-auto min-h-0 ${(result || generating || resumeResult || resumeGenerating) ? 'py-0 space-y-0' : 'py-6 space-y-6'}`}>
 
           {!result && !generating && (
           <div className="flex justify-center items-center gap-0.5 md:gap-1 flex-wrap">
@@ -404,10 +530,16 @@ export default function PaperWizard({ onNewSession }) {
                     </div>
                   </div>
                 )}
-                <button onClick={skipInterview}
-                  className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95]">
-                  {analysis.ready ? 'Skip to Generate →' : 'Start Interview →'}
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={() => handleSelectMode('resume')}
+                    className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95]">
+                    Generate Resume
+                  </button>
+                  <button onClick={() => handleSelectMode('ieee')}
+                    className="rounded-full text-sm font-medium px-5 py-2.5 border border-hairline text-ink transition-all active:scale-[0.95] hover:bg-canvas">
+                    Generate IEEE Paper
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -576,7 +708,122 @@ export default function PaperWizard({ onNewSession }) {
             </div>
           )}
 
-          {result && (
+          {/* ─── Resume interview (step 2, mode=resume) ──────────────────── */}
+          {mode === 'resume' && (step === 2 || (step === 1 && resumeQuestion)) && (
+            <div className="flex flex-col border rounded-2xl overflow-hidden flex-1 min-h-0 bg-canvas border-hairline"
+              style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
+              <div className="px-4 md:px-6 py-3 border-b border-hairline text-sm shrink-0 flex items-center gap-2 text-muted">
+                <span className="w-2 h-2 rounded-full bg-accent-teal" />
+                <span className="hidden sm:inline">Resume Interview —</span> answering questions
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 space-y-4" style={{ scrollBehavior: 'smooth' }}>
+                {resumeMessages.map((m, i) => {
+                  const prevRole = i > 0 ? resumeMessages[i-1].role : null;
+                  const isConsecutive = m.role === prevRole;
+                  return (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} ${isConsecutive ? 'mt-1' : 'mt-4'} ${i === resumeMessages.length - 1 ? 'animate-fadeIn' : ''}`}>
+                      <div className="flex items-start gap-2 max-w-[80%]">
+                        {m.role === 'ai' && (
+                          <span className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-semibold bg-primary text-white">AI</span>
+                        )}
+                        <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed"
+                          style={m.role === 'user'
+                            ? { backgroundColor: 'var(--primary)', color: '#ffffff', borderBottomRightRadius: '6px' }
+                            : { backgroundColor: 'var(--surface-card)', color: '#252523', borderBottomLeftRadius: '6px' }}>
+                          {m.text.split('\n').map((l, j) => (
+                            <p key={j} className={j > 0 ? 'mt-2' : ''}>{l}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {aiTyping && (
+                  <div className="flex justify-start">
+                    <div className="flex items-start gap-2">
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-semibold bg-primary text-white">AI</span>
+                      <div className="rounded-2xl px-4 py-3 bg-surface-card" style={{ borderBottomLeftRadius: '6px' }}>
+                        <TypingDots />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEnd} />
+              </div>
+              <div className="px-4 md:px-6 py-4 border-t border-hairline shrink-0 bg-canvas">
+                {resumeQuestion && (
+                  <div>
+                    <p className="text-xs font-mono uppercase mb-2.5 flex items-center gap-1.5 text-muted">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                      </svg>
+                      {resumeQuestion.options?.length > 0 ? 'Choose an option or type a custom answer' : 'Type your answer'}
+                    </p>
+                    {resumeQuestion.options?.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {resumeQuestion.options.map((o, i) => (
+                          <button key={i} onClick={() => answerResumeQuestion(o)} disabled={loading}
+                            className="rounded-full text-sm px-4 py-2 transition-all active:scale-[0.95] hover:opacity-85 bg-canvas border border-hairline text-ink">
+                            {o}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <input className="flex-1 rounded-full px-5 py-2.5 text-sm outline-none border transition-all duration-200 bg-canvas border-hairline text-ink"
+                        style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.04)' }}
+                        placeholder={resumeQuestion.options?.length > 0 ? 'Or type a custom answer...' : 'Type your answer...'}
+                        value={resumeCustomAnswer} onChange={e => setResumeCustomAnswer(e.target.value)}
+                        onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px rgba(204,120,92,0.15)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'var(--hairline)'; e.target.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.04)'; }}
+                        onKeyDown={e => e.key === 'Enter' && answerResumeQuestion(resumeCustomAnswer)} />
+                      <button onClick={() => answerResumeQuestion(resumeCustomAnswer)} disabled={loading || !resumeCustomAnswer.trim()}
+                        className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95] disabled:opacity-40">
+                        Send
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!resumeQuestion && resumeMessages.length > 0 && (
+                  <p className="text-xs text-center text-muted">Waiting for AI response...</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Resume ready to generate (step 3, mode=resume) ──────────── */}
+          {mode === 'resume' && (step === 3 || resumeReady) && !resumeResult && !resumeGenerating && (
+            <div className="rounded-2xl border transition-all duration-200 bg-surface-card border-hairline">
+              <div className="p-5 md:p-8 text-center">
+                <p className="text-base md:text-lg mb-4 font-display text-ink" style={{ letterSpacing: '-0.3px' }}>Ready to generate your resume</p>
+                <button onClick={handleResumeGenerate}
+                  className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95]">
+                  Generate Resume
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Resume generating ────────────────────────────────────────── */}
+          {mode === 'resume' && resumeGenerating && (
+            <div className="flex flex-col border rounded-2xl overflow-hidden bg-surface-dark border-surface-dark-elevated min-h-0"
+              style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: 'calc(100vh - 180px)' }}>
+              <div className="px-5 py-3 border-b border-surface-dark-elevated shrink-0 flex items-center gap-2 text-muted">
+                <span className="w-2 h-2 rounded-full animate-pulse bg-accent-teal" />
+                <span className="text-xs font-mono">Generating resume</span>
+                <TypingDots />
+              </div>
+              <div className="flex-1 overflow-y-auto p-5">
+                <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed" style={{ color: '#d4d0c8' }}>
+                  {liveResume || <span className="text-muted">Waiting for response...</span>}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {result && mode !== 'resume' && (
             <div className="flex flex-col rounded-2xl border bg-surface-dark border-surface-dark-elevated overflow-hidden min-h-0"
               style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: 'calc(100vh - 180px)' }}>
               <div className="px-5 md:px-8 py-4 border-b border-surface-dark-elevated shrink-0 flex flex-wrap items-center justify-between gap-3">
@@ -712,6 +959,92 @@ export default function PaperWizard({ onNewSession }) {
                   </button>
                 </div>
                 {editError && !editMode && (
+                  <div className="mt-2 rounded-xl p-3 text-sm border" style={{ backgroundColor: '#fdf0ef', borderColor: '#e8b4b4', color: '#c64545' }}>{editError}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Resume result / edit (mode=resume) ───────────────────────── */}
+          {mode === 'resume' && resumeResult && (
+            <div className="flex flex-col rounded-2xl border bg-surface-dark border-surface-dark-elevated overflow-hidden min-h-0"
+              style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: 'calc(100vh - 180px)' }}>
+              <div className="px-5 md:px-8 py-4 border-b border-surface-dark-elevated shrink-0 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-display text-on-dark flex items-center gap-2">
+                  Resume generated <span className="text-accent-teal">✓</span>
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  {!resumeEditMode && (
+                    <button onClick={enterResumeEdit}
+                      className="rounded-full text-sm font-medium px-4 py-1.5 transition-all active:scale-[0.95] inline-flex items-center gap-1.5 border border-surface-dark-elevated text-muted hover:border-on-dark-soft hover:text-white">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                      Edit Resume
+                    </button>
+                  )}
+                  <a href={apiService.getResumeDownloadUrl(sessionId, "pdf")}
+                    className="rounded-full text-sm font-medium px-4 py-1.5 transition-all active:scale-[0.95] inline-flex items-center gap-1.5 bg-primary text-white"
+                    download={resumeResult.filename_html?.replace('.html', '.pdf')}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" />
+                      <line x1="16" y1="17" x2="8" y2="17" />
+                    </svg>
+                    Download PDF
+                  </a>
+                  <a href={apiService.getResumeDownloadUrl(sessionId, "html")}
+                    className="rounded-full text-sm font-medium px-4 py-1.5 border transition-all active:scale-[0.95] border-surface-dark-elevated text-muted hover:border-on-dark-soft hover:text-white"
+                    download={resumeResult.filename_html}>
+                    Download HTML
+                  </a>
+                </div>
+              </div>
+
+              {resumeEditMode ? (
+                <div className="flex-1 min-h-0 overflow-y-auto p-5 md:p-8">
+                  <textarea className="w-full h-full min-h-[400px] rounded-xl px-4 py-3 text-sm font-mono outline-none bg-surface-dark-elevated text-on-dark border border-transparent focus:border-primary resize-y"
+                    value={resumeEditable} onChange={e => setResumeEditable(e.target.value)} />
+                  {editError && (
+                    <div className="mt-3 rounded-xl p-3 text-sm border" style={{ backgroundColor: '#fdf0ef', borderColor: '#e8b4b4', color: '#c64545' }}>{editError}</div>
+                  )}
+                  <div className="flex gap-2 pt-3">
+                    <button onClick={handleResumeSave} disabled={resumeSaving}
+                      className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95] disabled:opacity-40">
+                      {resumeSaving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                    <button onClick={() => setResumeEditMode(false)} disabled={resumeSaving}
+                      className="rounded-full text-sm font-medium px-5 py-2.5 border border-surface-dark-elevated text-muted hover:text-white transition-all active:scale-[0.95] disabled:opacity-40">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0">
+                  <iframe
+                    key={resumePreviewKey}
+                    src={apiService.getResumeDownloadUrl(sessionId, "html")}
+                    className="w-full h-full border-0"
+                    title="Resume Preview"
+                  />
+                </div>
+              )}
+
+              <div className="px-5 md:px-8 py-4 border-t border-surface-dark-elevated shrink-0 bg-surface-dark">
+                <p className="text-xs font-mono uppercase mb-2 text-muted">Ask AI to edit</p>
+                <div className="flex gap-2">
+                  <input className="flex-1 rounded-full px-5 py-2.5 text-sm outline-none border transition-all duration-200 bg-surface-dark-elevated text-on-dark border-transparent focus:border-primary"
+                    placeholder="e.g. Add more skills, shorten the summary, reorder sections"
+                    value={resumeAiEditInput} onChange={e => setResumeAiEditInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleResumeAiEdit()} />
+                  <button onClick={handleResumeAiEdit} disabled={resumeAiEditing || !resumeAiEditInput.trim()}
+                    className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95] disabled:opacity-40 inline-flex items-center gap-1.5">
+                    {resumeAiEditing ? <>Editing<TypingDots /></> : 'Apply'}
+                  </button>
+                </div>
+                {editError && !resumeEditMode && (
                   <div className="mt-2 rounded-xl p-3 text-sm border" style={{ backgroundColor: '#fdf0ef', borderColor: '#e8b4b4', color: '#c64545' }}>{editError}</div>
                 )}
               </div>
