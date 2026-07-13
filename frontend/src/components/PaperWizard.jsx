@@ -483,7 +483,7 @@ export default function PaperWizard({ onNewSession }) {
                   <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
                   <button onClick={e => { e.stopPropagation(); handleUpload(); }} disabled={loading}
                     className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95] disabled:opacity-40 disabled:cursor-not-allowed">
-                    {loading ? <>Analyzing<TypingDots /></> : 'Upload & Analyze'}
+                    {loading ? <>Uploading<TypingDots /></> : 'Upload'}
                   </button>
                 </>
               )}
