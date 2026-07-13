@@ -43,7 +43,7 @@ Document content:
 
 def generate_question(file_text: str, answers: dict, questions_asked: list, analysis: dict = None) -> dict:
     analysis = analysis or {}
-    str_answers = {k: v for k, v in answers.items() if isinstance(v, str)}
+    str_answers = {k: v for k, v in answers.items() if isinstance(k, str) and isinstance(v, str)}
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in str_answers.items() if not q.startswith("_")]) if str_answers else "No answers yet."
     qa_text = "\n".join([f"- {q}" for q in questions_asked]) if questions_asked else "None"
 
@@ -299,7 +299,7 @@ Document content:
 def generate_resume_question(file_text: str, answers: dict, questions_asked: list, analysis: dict = None) -> dict:
     """Generate the next resume-specific interview question."""
     analysis = analysis or {}
-    str_answers = {k: v for k, v in answers.items() if isinstance(v, str)}
+    str_answers = {k: v for k, v in answers.items() if isinstance(k, str) and isinstance(v, str)}
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in str_answers.items() if not q.startswith("_")]) if str_answers else "No answers yet."
     qa_text = "\n".join([f"- {q}" for q in questions_asked]) if questions_asked else "None"
 
