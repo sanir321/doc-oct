@@ -30,6 +30,121 @@ function TypingDots() {
   );
 }
 
+function DocIcon({ color }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color || '#6c6a64'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
+    </svg>
+  );
+}
+
+function Sidebar({ current, history, onSelectDoc, onReset }) {
+  let profile = null;
+  try { const p = localStorage.getItem('userProfile'); if (p) profile = JSON.parse(p); } catch {}
+
+  return (
+    <aside className="hidden md:flex flex-col w-64 shrink-0 min-h-0 h-full">
+      <div className="flex-1 rounded-2xl border border-hairline bg-surface-card flex flex-col overflow-y-auto min-h-0"
+        style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+        {/* Header */}
+        <div className="px-4 py-3.5 border-b border-hairline shrink-0 flex items-center gap-2.5 text-ink">
+          <LogoMark size={16} />
+          <span className="text-sm font-medium">Research Paper AI</span>
+        </div>
+
+        {/* Document list */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {history.length === 0 && !current && (
+            <div className="text-center py-8">
+              <p className="text-xs font-mono uppercase mb-1 text-muted">Empty</p>
+              <p className="text-xs text-muted-soft">Upload a file to get started</p>
+            </div>
+          )}
+
+          {history.map((doc, i) => {
+            const isActive = current && current.name === doc.name && current.lastModified === doc.lastModified;
+            return (
+              <button key={`${doc.name}-${i}`}
+                onClick={() => onSelectDoc(doc)}
+                className="w-full text-left rounded-xl px-3 py-2.5 transition-all active:scale-[0.98]"
+                style={{
+                  backgroundColor: isActive ? 'var(--canvas)' : 'transparent',
+                  border: isActive ? '1px solid var(--hairline)' : '1px solid transparent',
+                }}>
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5 shrink-0"><DocIcon /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm truncate font-medium text-ink">{doc.name}</p>
+                    {doc.title && (
+                      <p className="text-[11px] truncate mt-0.5 text-muted-soft">{doc.title}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-mono text-muted-soft">
+                        {formatSize(doc.size)}
+                      </span>
+                      <span className="text-[10px] text-muted-soft">
+                        {new Date(doc.uploadedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Current session details */}
+        {current && (
+          <div className="px-4 py-3 border-t border-hairline shrink-0">
+            <p className="text-[10px] font-mono uppercase mb-1.5 text-muted">Active Session</p>
+            <div className="rounded-xl px-3 py-2 bg-canvas">
+              <p className="text-xs font-medium truncate text-ink">{current.name}</p>
+              <p className="text-[10px] mt-0.5 text-muted-soft">
+                {current.sections || 0} sections · {current.qaCount || 0} Q&A
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* New Session button */}
+        <div className="p-3 border-t border-hairline shrink-0">
+          <button onClick={onReset}
+            className="w-full text-xs rounded-full px-3 py-2 text-center transition-all hover:opacity-80 active:scale-[0.95] flex items-center justify-center gap-1.5 bg-canvas text-muted">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6c6a64" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Session
+          </button>
+        </div>
+
+        {/* Profile at bottom */}
+        {profile && (
+          <div className="px-4 py-3 border-t border-hairline shrink-0 bg-canvas">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                style={{ backgroundColor: '#cc785c', color: '#fff' }}>
+                {profile.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium truncate text-ink">{profile.name}</p>
+                <p className="text-[10px] truncate text-muted">{profile.course} · {profile.year}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
 export default function PaperWizard({ onNewSession }) {
   const [step, setStep] = useState(0);
   const [prevStep, setPrevStep] = useState(0);
@@ -61,6 +176,7 @@ export default function PaperWizard({ onNewSession }) {
   const [aiEditing, setAiEditing] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const [editError, setEditError] = useState('');
+  const [uploadHistory, setUploadHistory] = useState([]);
 
   // Resume mode state
   const [mode, setMode] = useState(''); // '' | 'ieee' | 'resume'
@@ -96,6 +212,20 @@ export default function PaperWizard({ onNewSession }) {
     try {
       const data = await apiService.uploadFile(file);
       setSessionId(data.session_id);
+      const docEntry = {
+        name: file.name,
+        size: file.size,
+        lastModified: file.lastModified,
+        sessionId: data.session_id,
+        title: '',
+        uploadedAt: Date.now(),
+        sections: 0,
+        qaCount: 0,
+      };
+      setUploadHistory(prev => {
+        const filtered = prev.filter(d => d.name !== file.name || d.lastModified !== file.lastModified);
+        return [docEntry, ...filtered].slice(0, 50);
+      });
       goStep(1);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
@@ -201,8 +331,6 @@ export default function PaperWizard({ onNewSession }) {
     };
   };
 
-  const handleReset = () => { onNewSession(); };
-
   const enterEdit = () => {
     const pj = result.paper_json || {};
     setEditable({
@@ -276,6 +404,10 @@ export default function PaperWizard({ onNewSession }) {
       } else {
         // IEEE mode — set analysis and first question
         setAnalysis(data.analysis);
+        const docTitle = data.analysis?.title || file?.name || 'Untitled';
+        setUploadHistory(prev => prev.map(d =>
+          d.sessionId === sessionId ? { ...d, title: docTitle } : d
+        ));
         if (data.question) {
           setQuestion(data.question);
           setAiTyping(true);
@@ -380,8 +512,35 @@ export default function PaperWizard({ onNewSession }) {
     finally { setResumeAiEditing(false); }
   };
 
+  const handleSelectDoc = (doc) => {
+    if (doc.sessionId && doc.sessionId !== sessionId) {
+      setSessionId(doc.sessionId);
+      goStep(1);
+    }
+  };
+
+  const currentDocInfo = file ? {
+    name: file.name,
+    size: file.size,
+    lastModified: file.lastModified,
+    sections: analysis?.present_sections?.length || 0,
+    qaCount: messages.filter(m => m.role === 'user').length,
+  } : null;
+
+  const handleReset = () => {
+    setFile(null);
+    setSessionId(null);
+    goStep(0);
+  };
+
   return (
     <div className="flex flex-1 min-h-0 p-3 md:p-4 gap-3 md:gap-6">
+      <Sidebar
+        current={currentDocInfo}
+        history={uploadHistory}
+        onSelectDoc={handleSelectDoc}
+        onReset={handleReset}
+      />
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <div className={`flex-1 flex flex-col max-w-5xl w-full mx-auto min-h-0 ${(result || generating || resumeResult || resumeGenerating) ? 'py-0 space-y-0' : 'py-6 space-y-6'}`}>
 
