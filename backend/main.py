@@ -5,7 +5,7 @@ import uvicorn
 import os, re, uuid, tempfile, json
 import PyPDF2
 from docx import Document
-from config import MAX_FILE_SIZE, UPLOAD_DIR
+from config import MAX_FILE_SIZE
 from services.llm_service import (
     analyze_document, generate_question, generate_paper_stream, edit_paper,
     analyze_document_for_resume, generate_resume_question, generate_resume_stream, edit_resume
@@ -14,7 +14,6 @@ from services.llm_service import (
 app = FastAPI(title="Research Paper Generator")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 sessions = {}
 
@@ -205,24 +204,15 @@ async def upload_file(file: UploadFile = File(...)):
     if not text.strip():
         raise HTTPException(400, "Could not extract text from file")
 
-    analysis = analyze_document(text)
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
         "file_text": text, "filename": file.filename,
         "answers": {}, "questions_asked": [],
-        "ready": False, "analysis": analysis,
+        "ready": False, "analysis": {},
         "paper_text": None
     }
 
-    question = None
-    if not analysis.get("ready", False):
-        q_result = generate_question(text, {}, [], analysis)
-        if not q_result.get("ready"):
-            question = q_result
-
-    if question and session_id in sessions:
-        sessions[session_id]["_last_qtype"] = question.get("type", "")
-    return {"session_id": session_id, "analysis": analysis, "question": question}
+    return {"session_id": session_id}
 
 @app.post("/api/ask/{session_id}")
 async def ask_question(session_id: str):
@@ -1042,7 +1032,7 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
 
 @app.post("/api/set-mode/{session_id}")
 async def set_mode(session_id: str, data: dict):
-    """Set the session mode to 'resume' or 'ieee'. Returns first resume question if resume mode."""
+    """Set the session mode to 'resume' or 'ieee'. Runs mode-specific analysis."""
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
@@ -1051,7 +1041,6 @@ async def set_mode(session_id: str, data: dict):
     s["mode"] = mode
 
     if mode == "resume":
-        # Run resume analysis
         resume_analysis = analyze_document_for_resume(s["file_text"])
         s["resume_analysis"] = resume_analysis
         s["resume_answers"] = {}
@@ -1061,7 +1050,6 @@ async def set_mode(session_id: str, data: dict):
         s["resume_html"] = None
         s["resume_data"] = None
 
-        # Get first question
         q_result = generate_resume_question(
             s["file_text"], s["resume_answers"], s["resume_questions_asked"], resume_analysis
         )
@@ -1071,7 +1059,22 @@ async def set_mode(session_id: str, data: dict):
         s["_last_resume_qtype"] = q_result.get("type", "")
         return {"mode": mode, "ready": False, "question": q_result}
 
-    return {"mode": mode, "ready": False}
+    # IEEE mode — run analysis now
+    analysis = analyze_document(s["file_text"])
+    s["analysis"] = analysis
+    s["answers"] = {}
+    s["questions_asked"] = []
+    s["ready"] = False
+
+    question = None
+    if not analysis.get("ready", False):
+        q_result = generate_question(s["file_text"], {}, [], analysis)
+        if not q_result.get("ready"):
+            question = q_result
+    if question:
+        s["_last_qtype"] = question.get("type", "")
+
+    return {"mode": mode, "analysis": analysis, "question": question}
 
 
 @app.post("/api/ask-resume/{session_id}")

@@ -96,7 +96,6 @@ export default function PaperWizard({ onNewSession }) {
     try {
       const data = await apiService.uploadFile(file);
       setSessionId(data.session_id);
-      setAnalysis(data.analysis);
       goStep(1);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
@@ -275,8 +274,20 @@ export default function PaperWizard({ onNewSession }) {
         }
         goStep(2);
       } else {
-        // IEEE mode — continue existing flow
-        skipInterview();
+        // IEEE mode — set analysis and first question
+        setAnalysis(data.analysis);
+        if (data.question) {
+          setQuestion(data.question);
+          setAiTyping(true);
+          setTimeout(() => {
+            setAiTyping(false);
+            setMessages([{ role: 'ai', text: `I've analyzed "${file.name}". Let me ask a few questions.\n\n${data.question.question}` }]);
+            goStep(2);
+          }, 600);
+        } else {
+          setReady(true);
+          setMessages([{ role: 'ai', text: `I've analyzed "${file.name}". The analysis is clear enough to generate a paper!` }]);
+        }
       }
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
@@ -479,7 +490,26 @@ export default function PaperWizard({ onNewSession }) {
             </div>
           )}
 
-          {step === 1 && !loading && analysis && (
+          {step === 1 && !loading && !analysis && (
+            <div className="rounded-2xl border transition-all duration-200 bg-surface-card border-hairline">
+              <div className="p-5 md:p-8 text-center">
+                <h2 className="text-xl md:text-2xl font-display mb-2 font-normal text-ink" style={{ letterSpacing: '-0.5px' }}>Choose your output</h2>
+                <p className="text-sm text-muted mb-6">What would you like to generate from this document?</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <button onClick={() => handleSelectMode('resume')}
+                    className="rounded-full text-sm font-medium px-6 py-3 bg-primary text-white transition-all active:scale-[0.95] hover:shadow-md">
+                    Generate Resume
+                  </button>
+                  <button onClick={() => handleSelectMode('ieee')}
+                    className="rounded-full text-sm font-medium px-6 py-3 border border-hairline text-ink transition-all active:scale-[0.95] hover:bg-canvas">
+                    Generate IEEE Paper
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && !loading && analysis && mode === 'ieee' && (
             <div className="rounded-2xl border transition-all duration-200 bg-surface-card border-hairline">
               <div className="p-5 md:p-8">
                 <h2 className="text-xl md:text-2xl font-display mb-4 font-normal text-ink" style={{ letterSpacing: '-0.5px' }}>Analysis complete</h2>
@@ -514,16 +544,6 @@ export default function PaperWizard({ onNewSession }) {
                     </div>
                   </div>
                 )}
-                <div className="flex flex-wrap gap-3">
-                  <button onClick={() => handleSelectMode('resume')}
-                    className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95]">
-                    Generate Resume
-                  </button>
-                  <button onClick={() => handleSelectMode('ieee')}
-                    className="rounded-full text-sm font-medium px-5 py-2.5 border border-hairline text-ink transition-all active:scale-[0.95] hover:bg-canvas">
-                    Generate IEEE Paper
-                  </button>
-                </div>
               </div>
             </div>
           )}
