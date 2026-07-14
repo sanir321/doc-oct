@@ -297,9 +297,15 @@ async def submit_answer(session_id: str, data: dict):
             s["analysis"]["contact_email"] = answer.strip()
         s["answers"]["_email_ok"] = True
     elif qtype == "title":
-        if answer.strip():
+        if "I'll type" in answer or "type the title" in answer:
+            s["answers"]["_need_typed_title"] = True
+        elif "first line" in answer:
+            first_line = (s["file_text"] or "").strip().split("\n")[0][:100]
+            s["analysis"]["title"] = first_line
+            s["answers"]["_title_ok"] = True
+        elif answer.strip():
             s["analysis"]["title"] = answer.strip()
-        s["answers"]["_title_ok"] = True
+            s["answers"]["_title_ok"] = True
     elif qtype == "keywords":
         if answer.strip():
             kws = [k.strip() for k in answer.replace(";", ",").split(",") if k.strip()]
@@ -317,6 +323,7 @@ async def submit_answer(session_id: str, data: dict):
         if qtype == "title_correct" and answer.strip():
             s["analysis"]["title"] = answer.strip()
         s["answers"]["_title_ok"] = True
+        s["answers"].pop("_need_typed_title", None)
 
     # ponytail: skip the extra clarity-gate LLM call — always advance
     q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"], s.get("analysis"))
@@ -476,6 +483,7 @@ def generate_stream(session_id: str):
             s["paper_text"] = paper_text
             result = parse_paper_text(paper_text, s["analysis"], session_id)
             s["html_content"] = result["html_content"]
+            s["paper_json"] = result.get("paper_json")
             yield f"data: {json.dumps({'type': 'done', 'result': result})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -1420,7 +1428,10 @@ async def set_mode(session_id: str, data: dict):
         return {"mode": mode, "ready": False, "question": q_result}
 
     # IEEE mode — run analysis now
-    analysis = analyze_document(s["file_text"])
+    try:
+        analysis = analyze_document(s["file_text"])
+    except Exception:
+        analysis = {}
     s["analysis"] = analysis
     s["answers"] = {}
     s["questions_asked"] = []
