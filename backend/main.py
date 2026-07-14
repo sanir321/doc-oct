@@ -5,6 +5,12 @@ import uvicorn
 import os, re, uuid, tempfile, json
 import PyPDF2
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from io import BytesIO
 from config import MAX_FILE_SIZE
 from services.llm_service import (
     analyze_document, generate_question, generate_paper_stream, edit_paper,
@@ -121,8 +127,9 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
   .abstract p {{ font-size: 10pt; font-weight: bold; font-style: italic; text-align: justify; display: inline; }}
   .kw-label {{ font-size: 10pt; font-weight: bold; font-style: italic; }}
   .keywords {{ font-size: 10pt; margin-bottom: 12px; font-style: italic; }}
-  .content {{ column-count: 2; column-gap: 0.25in; }}
-  .section {{ margin-bottom: 0; }}
+  .header {{ column-span: all; width: 100%; page-break-after: avoid; }}
+  .content {{ column-count: 2; column-gap: 0.25in; column-fill: auto; }}
+  .section {{ margin-bottom: 0; break-inside: avoid; }}
   .section h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; letter-spacing: 0.5pt; }}
   .section h3 {{ font-size: 10pt; font-style: italic; font-weight: normal; text-align: left; margin: 9pt 0 3pt 0; font-family: "Times New Roman", Times, serif; }}
   .section p {{ text-align: justify; text-indent: 0.17in; margin-bottom: 0; line-height: 1.15; }}
@@ -137,12 +144,14 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
   @media print {{ body {{ padding: 0; }} }}
 </style></head><body>
 <div class="paper">
-  <h1>{title}</h1>
-  <div class="authors">{authors_html}</div>
-  <div class="abstract"><span class="abstract-label">Abstract - </span><p>{abstract}</p></div>
-  <div class="keywords"><span class="kw-label">Index Terms - </span>{keywords_str}</div>
-  <div class="content">{sections_html}</div>
-  {refs_html}
+  <div class="header">
+    <h1>{title}</h1>
+    <div class="authors">{authors_html}</div>
+    <div class="abstract"><span class="abstract-label">Abstract - </span><p>{abstract}</p></div>
+    <div class="keywords"><span class="kw-label">Index Terms - </span>{keywords_str}</div>
+  </div>
+  <div class="content">{sections_html}
+  {refs_html}</div>
 </div>
 </body></html>"""
 
@@ -422,6 +431,8 @@ def parse_paper_text(paper_text, analysis, session_id):
         "html_content": html_content,
         "download_html": f"/api/download/{session_id}/html",
         "filename_html": f"{base_name}.html",
+        "download_docx": f"/api/download/{session_id}/docx",
+        "filename_docx": f"{base_name}.docx",
         "paper_json": paper_json,
     }
 
@@ -647,6 +658,317 @@ def generate_pdf_from_html(html_content: str) -> bytes:
             state["y"] += 2
 
     return bytes(pdf.output())
+
+
+# ─── DOCX generator (IEEE) ────────────────────────────────────────────────────
+
+
+def _set_continuous_section_break(doc):
+    """After doc.add_section(), find the embedded sectPr in the previous
+    section's last paragraph and change its break type to continuous."""
+    body = doc.element.body
+    for p in reversed(body.findall(qn('w:p'))):
+        pPr = p.find(qn('w:pPr'))
+        if pPr is not None:
+            embedded = pPr.find(qn('w:sectPr'))
+            if embedded is not None:
+                type_elem = embedded.find(qn('w:type'))
+                if type_elem is None:
+                    type_elem = OxmlElement('w:type')
+                    embedded.insert(0, type_elem)
+                type_elem.set(qn('w:val'), 'continuous')
+                return True
+    return False
+
+
+def _add_run(paragraph, text, size=10, bold=False, italic=False, font_name='Times New Roman', small_caps=False):
+    """Add a formatted run to a paragraph."""
+    run = paragraph.add_run(text)
+    run.font.name = font_name
+    run.font.size = Pt(size)
+    run.bold = bold
+    run.italic = italic
+    if small_caps:
+        run.font.small_caps = True
+    return run
+
+
+def _set_cols(sectPr, num=None, space='720'):
+    """Set or update the w:cols element on a sectPr.
+
+    Removes any existing w:cols, then creates a new one.
+    num=None → single column (attribute omitted).
+    num='2'  → two columns with specified gutter space.
+    """
+    ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+    existing = sectPr.find(ns + 'cols')
+    if existing is not None:
+        sectPr.remove(existing)
+    cols = OxmlElement('w:cols')
+    cols.set(qn('w:space'), space)
+    if num is not None:
+        cols.set(qn('w:num'), num)
+    sectPr.append(cols)
+
+
+def _remove_table_borders(table):
+    """Remove all borders from a python-docx table via XML manipulation."""
+    tbl_pr = table._tbl.find(qn('w:tblPr'))
+    if tbl_pr is None:
+        tbl_pr = OxmlElement('w:tblPr')
+        table._tbl.insert(0, tbl_pr)
+    borders = OxmlElement('w:tblBorders')
+    for name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+        el = OxmlElement(f'w:{name}')
+        el.set(qn('w:val'), 'none')
+        el.set(qn('w:sz'), '0')
+        el.set(qn('w:space'), '0')
+        el.set(qn('w:color'), 'auto')
+        borders.append(el)
+    tbl_pr.append(borders)
+
+
+def _is_table_sep(s):
+    """Detect markdown table separator row like |---|---|."""
+    s = s.strip().strip("|")
+    return bool(s) and set(s) <= set("-: |") and "-" in s
+
+
+def _is_caption(s):
+    """Detect figure/table caption."""
+    return bool(re.match(r'^(figure|table)\s*\d*\.?\s', s, re.I))
+
+
+def _render_body_docx(doc, content):
+    """Parse body content text and add paragraphs and tables to the document."""
+    lines = [l.rstrip() for l in content.split("\n")]
+    i, n = 0, len(lines)
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+        if not stripped:
+            i += 1
+            continue
+
+        # ---- Caption ----
+        if _is_caption(stripped):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(6)
+            p.paragraph_format.line_spacing = 1.0
+            _add_run(p, stripped, size=10, small_caps=True)
+            i += 1
+            continue
+
+        # ---- Markdown table ----
+        if "|" in stripped and i + 1 < n and _is_table_sep(lines[i + 1]):
+            rows = []
+            while i < n and "|" in lines[i].strip():
+                rows.append(lines[i].strip())
+                i += 1
+            header = [c.strip() for c in rows[0].strip().strip("|").split("|")]
+            data = []
+            for r in rows[2:]:
+                if "|" in r:
+                    data.append([c.strip() for c in r.strip().strip("|").split("|")])
+            if data:
+                tbl = doc.add_table(rows=len(data) + 1, cols=len(header))
+                tbl.style = 'Table Grid'
+                for j, h in enumerate(header):
+                    cell = tbl.cell(0, j)
+                    cp = cell.paragraphs[0]
+                    cp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    _add_run(cp, h, size=9, bold=True)
+                for ri, row in enumerate(data):
+                    for ci, val in enumerate(row):
+                        cell = tbl.cell(ri + 1, ci)
+                        cp = cell.paragraphs[0]
+                        cp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        _add_run(cp, val, size=9)
+            continue
+
+        # ---- Regular paragraph ----
+        para = [stripped]
+        i += 1
+        while i < n and lines[i].strip() and "|" not in lines[i] and not _is_table_sep(lines[i]) and not _is_caption(lines[i].strip()):
+            para.append(lines[i].strip())
+            i += 1
+
+        p = doc.add_paragraph()
+        p.paragraph_format.first_line_indent = Inches(0.17)
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.line_spacing = 1.0
+        _add_run(p, ' '.join(para), size=10)
+
+
+def generate_ieee_docx(paper_json: dict) -> bytes:
+    """Generate a 3-section IEEE-format DOCX with continuous section breaks.
+
+    Section 1 — single column: title, author table, abstract, keywords.
+    Section 2 — two columns: body sections (Introduction → Acknowledgements).
+    Section 3 — two columns: references.
+    """
+    doc = Document()
+
+    # ── Page setup ──
+    section1 = doc.sections[0]
+    section1.top_margin = Inches(0.75)
+    section1.bottom_margin = Inches(0.75)
+    section1.left_margin = Inches(0.65)
+    section1.right_margin = Inches(0.65)
+
+    # ── Default style (Normal) ──
+    normal_style = doc.styles['Normal']
+    normal_style.font.name = 'Times New Roman'
+    normal_style.font.size = Pt(10)
+    normal_style.paragraph_format.line_spacing = 1.0
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 1 — Single column, full width
+    # ═══════════════════════════════════════════════════════════════
+    sect_pr_1 = section1._sectPr
+    _set_cols(sect_pr_1, num=None, space='720')   # single column
+    title_pg = OxmlElement('w:titlePg')            # first-page different footer
+    sect_pr_1.append(title_pg)
+
+    # ── Title / Author table (3 columns, borderless) ──
+    tbl_widths = [3271, 3273, 3276]          # dxa (twips)
+    table = doc.add_table(rows=2, cols=3)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _remove_table_borders(table)
+
+    # Set gridCol widths in twips (dxa)
+    tbl_grid = table._tbl.find(qn('w:tblGrid'))
+    if tbl_grid is not None:
+        gcs = tbl_grid.findall(qn('w:gridCol'))
+        for i, w in enumerate(tbl_widths):
+            gcs[i].set(qn('w:w'), str(w))
+
+    # Row 1 — Title merged across all 3 columns
+    title_cell = table.cell(0, 0)
+    title_cell.merge(table.cell(0, 2))
+    p_title = title_cell.paragraphs[0]
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.space_after = Pt(18)
+    p_title.clear()
+    _add_run(p_title, paper_json.get('title', ''), size=24, bold=True)
+
+    # Row 2 — Authors in middle column
+    authors = paper_json.get('authors', [])
+    author_cell = table.cell(1, 1)
+    p_author = author_cell.paragraphs[0]
+    p_author.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_author.paragraph_format.space_after = Pt(12)
+    p_author.clear()
+    author_lines = []
+    for a in authors:
+        parts = [a.get('name', '')]
+        affil = a.get('affiliation', '')
+        if affil:
+            parts.append(affil)
+        email = a.get('email', '')
+        if email:
+            parts.append(email)
+        author_lines.append(' — '.join(parts))
+    _add_run(p_author, '\n'.join(author_lines), size=12)
+
+    # ── Abstract (bold + italic, justified) ──
+    abstract_text = paper_json.get('abstract', '')
+    if abstract_text:
+        p_abs = doc.add_paragraph()
+        p_abs.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p_abs.paragraph_format.space_before = Pt(0)
+        p_abs.paragraph_format.space_after = Pt(0)
+        p_abs.paragraph_format.line_spacing = Pt(12)   # 240 twips
+        _add_run(p_abs, 'Abstract—', size=10, bold=True, italic=True)
+        _add_run(p_abs, abstract_text, size=10, bold=True, italic=True)
+
+    # ── Index Terms (italic) ──
+    keywords = paper_json.get('keywords', [])
+    if keywords:
+        p_kw = doc.add_paragraph()
+        p_kw.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p_kw.paragraph_format.space_before = Pt(0)
+        p_kw.paragraph_format.space_after = Pt(12)
+        p_kw.paragraph_format.line_spacing = Pt(12)
+        _add_run(p_kw, 'Index Terms—', size=10, bold=True, italic=True)
+        _add_run(p_kw, ', '.join(keywords), size=10, italic=True)
+
+    # ═══════════════════════════════════════════════════════════════
+    # CONTINUOUS BREAK → SECTION 2  (two columns)
+    # ═══════════════════════════════════════════════════════════════
+    doc.add_section()
+    _set_continuous_section_break(doc)
+
+    sect_pr_2 = doc.sections[1]._sectPr
+    _set_cols(sect_pr_2, num='2', space='461')
+
+    # ── Section 2: Body ──
+    sections_data = paper_json.get('sections', [])
+    for sec in sections_data:
+        sec_title = sec.get('title', '').strip()
+        sec_content = sec.get('content', '').strip()
+
+        if not sec_title:
+            continue
+
+        # Detect subsection: title starts with number+period (e.g. "2.1")
+        is_subsection = bool(re.match(r'^(\d+\.\d+)', sec_title))
+
+        if is_subsection:
+            # Heading 2 — italic, left-aligned
+            p_h2 = doc.add_paragraph()
+            p_h2.paragraph_format.space_before = Pt(9)
+            p_h2.paragraph_format.space_after = Pt(3)
+            p_h2.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            _add_run(p_h2, sec_title, size=10, italic=True)
+        else:
+            # Heading 1 — centered, small caps
+            p_h1 = doc.add_paragraph()
+            p_h1.paragraph_format.space_before = Pt(12)
+            p_h1.paragraph_format.space_after = Pt(6)
+            p_h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _add_run(p_h1, sec_title, size=10, bold=True, small_caps=True)
+
+        # Body paragraphs
+        if sec_content:
+            _render_body_docx(doc, sec_content)
+
+    # ═══════════════════════════════════════════════════════════════
+    # CONTINUOUS BREAK → SECTION 3  (two columns, references)
+    # ═══════════════════════════════════════════════════════════════
+    doc.add_section()
+    _set_continuous_section_break(doc)
+
+    sect_pr_3 = doc.sections[2]._sectPr
+    _set_cols(sect_pr_3, num='2', space='461')
+
+    # ── Section 3: References ──
+    refs = paper_json.get('references', [])
+    if refs:
+        p_ref_h = doc.add_paragraph()
+        p_ref_h.paragraph_format.space_before = Pt(12)
+        p_ref_h.paragraph_format.space_after = Pt(6)
+        p_ref_h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _add_run(p_ref_h, 'References', size=10, bold=True, small_caps=True)
+
+        for i, ref in enumerate(refs, 1):
+            p_ref = doc.add_paragraph()
+            p_ref.paragraph_format.space_before = Pt(0)
+            p_ref.paragraph_format.space_after = Pt(6)
+            p_ref.paragraph_format.line_spacing = 1.0
+            p_ref.paragraph_format.left_indent = Inches(0.25)
+            p_ref.paragraph_format.first_line_indent = Inches(-0.25)
+            _add_run(p_ref, f'[{i}] {ref}', size=10)
+
+    # ── Save to bytes ──
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer.read()
+
 
 def build_markdown(title, abstract, sections, keywords, refs):
     parts = [f"## Abstract\n{abstract}"]
@@ -1310,6 +1632,8 @@ async def save_paper(session_id: str, data: dict):
         "html_content": html,
         "download_html": f"/api/download/{session_id}/html",
         "filename_html": f"{base}.html",
+        "download_docx": f"/api/download/{session_id}/docx",
+        "filename_docx": f"{base}.docx",
         "paper_json": pj,
     }
 
@@ -1347,6 +1671,11 @@ async def download(session_id: str, fmt: str):
         pdf_bytes = generate_pdf_from_html(s["html_content"])
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={base}.pdf"})
+    if fmt == "docx" and s.get("paper_json"):
+        docx_bytes = generate_ieee_docx(s["paper_json"])
+        media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        return Response(content=docx_bytes, media_type=media,
+                        headers={"Content-Disposition": f'attachment; filename="{base}.docx"'})
     raise HTTPException(404, "Format not found")
 
 if __name__ == "__main__":

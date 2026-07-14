@@ -2,6 +2,19 @@ import httpx
 import json
 from config import OPENCODE_ZEN_API_KEY, OPENCODE_ZEN_BASE_URL, LLM_MODEL
 
+CONTENT_RULES = """Content Integrity Rules:
+- Author affiliation must be the actual institution — never fabricate or leave a placeholder affiliation (e.g., do not write "Indian Institute of Technology" for a non-IIT student).
+- Do not state quantitative results (latency numbers, satisfaction scores, benchmark data) unless they come from an actual measured test — otherwise phrase the section as "Proposed Architecture" / "System Design", not "Results."
+- Every reference must correspond to a real, verifiable source. Do not invent arXiv IDs, conference proceedings, or blog URLs to fill a References list.
+- Single-author case: center the author block (use only the middle cell if the table has 3 columns, or a single centered cell — do not fabricate coauthors).
+- Write in plain, direct academic English. Avoid jargon, buzzwords, and unnecessarily complex phrasing. Use active voice where possible.
+- Prefer active voice over passive (e.g., "We trained the model" not "The model was trained").
+- Use IEEE citation style: bracketed numbers [1], [2] in text, with full references in IEEE format.
+- Do not invent numerical results, statistics, metrics, or data points not present in the source document."""
+
+RESUME_CONTENT_RULE = """Content Integrity Rule:
+- Do not fabricate job titles, companies, degrees, or dates. Only include information the user has provided."""
+
 def call_llm(messages, temperature=0.7, max_tokens=8192):
     resp = httpx.post(
         f"{OPENCODE_ZEN_BASE_URL}/chat/completions",
@@ -37,7 +50,7 @@ def analyze_document(file_text: str) -> dict:
 Document content:
 {file_text[:15000]}"""
     return call_llm_json([
-        {"role": "system", "content": "You extract IEEE paper metadata from documents. Return only valid JSON."},
+        {"role": "system", "content": f"You extract IEEE paper metadata from documents. Return only valid JSON.\n\n{CONTENT_RULES}"},
         {"role": "user", "content": prompt}
     ])
 
@@ -163,7 +176,7 @@ Rules:
 
 If asking: {{"ready": false, "question": "...", "options": ["short example 1", "short example 2"], "context": "why needed"}}"""
     return call_llm_json([
-        {"role": "system", "content": "You help write IEEE papers. Ask the user only about genuinely missing content, in friendly plain English. When the user has no more data, return ready=true."},
+        {"role": "system", "content": f"You help write IEEE papers. Ask the user only about genuinely missing content, in friendly plain English. When the user has no more data, return ready=true.\n\n{CONTENT_RULES}"},
         {"role": "user", "content": f"Document: {file_text[:5000]}\n\n{prompt}"}
     ])
 
@@ -182,7 +195,7 @@ If the instruction changes the paper title, output the new title as the VERY FIR
 Otherwise, do not include any top-level title line.
 Never include reasoning, chain-of-thought, or commentary — output only the revised paper."""
     messages = [
-        {"role": "system", "content": "You edit IEEE-format research papers using only ##-prefixed section headings. Output only the paper, never reasoning or commentary. Never add sections that aren't in the current paper."},
+        {"role": "system", "content": f"You edit IEEE-format research papers using only ##-prefixed section headings. Output only the paper, never reasoning or commentary. Never add sections that aren't in the current paper.\n\n{CONTENT_RULES}"},
         {"role": "user", "content": prompt}
     ]
     text = call_llm(messages, temperature=0.4, max_tokens=16384)
@@ -232,7 +245,7 @@ Document context: {file_text[:12000]}
 
 Author details: {answers_text}"""
     messages = [
-        {"role": "system", "content": "You write IEEE-format research papers. You use only ##-prefixed section headings. You never include reasoning or chain-of-thought in your output."},
+        {"role": "system", "content": f"You write IEEE-format research papers. You use only ##-prefixed section headings. You never include reasoning or chain-of-thought in your output.\n\n{CONTENT_RULES}"},
         {"role": "user", "content": prompt}
     ]
     with httpx.Client(timeout=300) as client:
