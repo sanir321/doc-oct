@@ -41,7 +41,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-canvas text-body">
       {/* Fixed Nav */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-canvas border-b border-hairline">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-canvas/80 backdrop-blur-lg border-b border-hairline">
         <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
           <span className="text-ink text-sm font-medium flex items-center gap-2">
             <LogoMark size={16} />
@@ -49,7 +49,7 @@ export default function App() {
           </span>
           <div className="flex items-center gap-4">
             <button onClick={() => navigate('/generate')}
-              className="text-sm font-medium rounded-md px-[18px] py-[10px] bg-primary text-on-primary transition-opacity hover:opacity-90">
+              className="text-sm font-medium rounded-md px-[18px] py-[10px] bg-primary text-on-primary transition-all hover:opacity-90 hover:shadow-lg active:scale-[0.97]">
               Get Started
             </button>
           </div>
@@ -57,54 +57,64 @@ export default function App() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-24 md:pt-32 pb-20 md:pb-24 px-4 md:px-6 max-w-5xl mx-auto text-center">
-        <div className="mb-6 flex justify-center">
-          <LogoMark size={48} />
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-full px-[10px] py-[4px] mb-10 bg-surface-card">
-          <span className="w-1.5 h-1.5 rounded-full bg-accent-teal" />
-          <span className="text-[11px] font-semibold tracking-[0.88px] uppercase text-muted">
-            AI-Powered Generation
-          </span>
-        </div>
+      <section className="relative pt-28 md:pt-36 pb-20 md:pb-28 px-4 md:px-6 max-w-5xl mx-auto text-center overflow-hidden">
+        {/* Subtle ambient glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-3xl pointer-events-none" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full bg-primary/3 blur-3xl pointer-events-none" />
 
-        <h1 className="font-display text-5xl md:text-6xl font-normal leading-[1.05] mb-6 text-ink"
-          style={{ letterSpacing: '-1.5px' }}>
-          Upload once.<br />
-          Paper or resume.
-        </h1>
+        <div className="relative">
+          <div className="mb-8 flex justify-center animate-fadeIn">
+            <LogoMark size={52} />
+          </div>
 
-        <p className="text-body text-base max-w-xl mx-auto mb-10 leading-relaxed">
-          Upload any document — AI extracts everything, interviews you on gaps, then generates either an
-          IEEE-formatted research paper or a professional resume. Two modes, one upload.
-        </p>
+          <h1 className="font-display text-5xl md:text-6xl font-normal leading-[1.05] mb-6 text-ink animate-fadeIn opacity-0"
+            style={{ letterSpacing: '-1.5px', animationDelay: '0.1s', animationFillMode: 'forwards' }}>
+            Upload once.<br />
+            Paper or resume.
+          </h1>
 
-        <div className="flex flex-wrap justify-center gap-4">
+          <p className="text-body text-base max-w-xl mx-auto mb-10 leading-relaxed animate-fadeIn opacity-0"
+            style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}>
+            Upload any document — AI extracts everything, interviews you on gaps, then generates either an
+            IEEE-formatted research paper or a professional resume. Two modes, one upload.
+          </p>
+
+          <div className="flex flex-wrap justify-center gap-4 animate-fadeIn opacity-0"
+            style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}>
             <button onClick={() => navigate('/generate')}
-              className="text-sm font-medium rounded-md px-[18px] py-[10px] bg-primary text-on-primary transition-opacity hover:opacity-90">
+              className="text-sm font-medium rounded-md px-[22px] py-[11px] bg-primary text-on-primary transition-all hover:opacity-90 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.97]">
               Start Generating
             </button>
-          <button
-            className="text-sm font-medium rounded-md px-[17px] py-[9px] border border-hairline text-ink transition-colors"
-            onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
-            How It Works
-          </button>
-        </div>
+            <button
+              className="text-sm font-medium rounded-md px-[21px] py-[10px] border border-hairline text-ink transition-all hover:bg-surface-card hover:border-ink/20 active:scale-[0.97]"
+              onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
+              How It Works
+            </button>
+          </div>
 
-        {/* Tech badges */}
-        <div className="flex flex-wrap justify-center gap-2 mt-12 pt-10 border-t border-hairline">
-          {['PDF', 'DOCX', 'Images', 'TXT', 'LaTeX', 'Code', 'CSV', 'HTML'].map(b => (
-            <span key={b} className="rounded-full px-[10px] py-[4px] text-[11px] font-semibold tracking-[0.88px] uppercase bg-surface-card text-ink">
-              {b}
-            </span>
-          ))}
+          {/* Tech badges */}
+          <div className="flex flex-wrap justify-center gap-2 mt-14 pt-10 border-t border-hairline animate-fadeIn opacity-0"
+            style={{ animationDelay: '0.4s', animationFillMode: 'forwards' }}>
+            {['PDF', 'DOCX', 'Images', 'TXT', 'LaTeX', 'Code', 'CSV', 'HTML'].map(b => (
+              <span key={b}
+                className="rounded-full px-[10px] py-[4px] text-[11px] font-semibold tracking-[0.88px] uppercase bg-surface-card text-ink transition-all hover:bg-surface-cream-strong hover:scale-105 cursor-default">
+                {b}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
+      {/* Gradient divider */}
+      <div className="max-w-5xl mx-auto px-4 md:px-6">
+        <div className="h-px bg-gradient-to-r from-transparent via-hairline to-transparent" />
+      </div>
+
       {/* Features */}
-      <section className="px-4 md:px-6 py-16 md:py-24 bg-surface-soft">
+      <section className="px-4 md:px-6 py-20 md:py-28 bg-surface-soft">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-16 animate-fadeIn opacity-0"
+            style={{ animationFillMode: 'forwards' }}>
             <span className="inline-block rounded-full px-[10px] py-[4px] text-[11px] font-semibold tracking-[0.88px] uppercase mb-4 bg-surface-cream-strong text-ink">
               Features
             </span>
@@ -118,8 +128,14 @@ export default function App() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {FEATURES.map((f, i) => (
-              <div key={f.title} className="rounded-xl p-7 bg-surface-card transition-opacity hover:opacity-90 animate-fadeIn opacity-0"
+              <div key={f.title}
+                className="group rounded-xl p-7 bg-surface-card border border-transparent transition-all hover:border-hairline hover:shadow-lg hover:-translate-y-0.5 animate-fadeIn opacity-0 cursor-default"
                 style={{ animationDelay: `${i * 0.12}s`, animationFillMode: 'forwards' }}>
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/15 transition-colors">
+                  <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
                 <h3 className="text-lg font-semibold mb-2 text-ink">{f.title}</h3>
                 <p className="text-sm text-muted-soft leading-relaxed">{f.desc}</p>
               </div>
@@ -128,9 +144,15 @@ export default function App() {
         </div>
       </section>
 
+      {/* Gradient divider */}
+      <div className="max-w-5xl mx-auto px-4 md:px-6">
+        <div className="h-px bg-gradient-to-r from-transparent via-hairline to-transparent" />
+      </div>
+
       {/* How it Works */}
-      <section id="how-it-works" className="px-4 md:px-6 py-16 md:py-24 max-w-5xl mx-auto">
-        <div className="text-center mb-16">
+      <section id="how-it-works" className="px-4 md:px-6 py-20 md:py-28 max-w-5xl mx-auto">
+        <div className="text-center mb-16 animate-fadeIn opacity-0"
+          style={{ animationFillMode: 'forwards' }}>
           <span className="inline-block rounded-full px-[10px] py-[4px] text-[11px] font-semibold tracking-[0.88px] uppercase mb-4 bg-surface-card text-ink">
             Workflow
           </span>
@@ -142,42 +164,58 @@ export default function App() {
             From upload to download in 4 simple steps
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="relative grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Connecting line between step numbers */}
+          <div className="hidden md:block absolute top-9 left-[calc(12.5%+36px)] right-[calc(12.5%+36px)] h-px bg-gradient-to-r from-primary/30 via-primary/15 to-transparent" />
+
           {STEPS.map((s, i) => (
-            <div key={s.num} className="relative rounded-xl p-6 text-left bg-surface-card transition-opacity hover:opacity-90 animate-fadeIn opacity-0"
-              style={{ animationDelay: `${0.5 + i * 0.15}s`, animationFillMode: 'forwards' }}>
-              <div className="text-2xl font-normal mb-3 font-display text-primary">{s.num}</div>
+            <div key={s.num}
+              className="relative rounded-xl p-6 text-left bg-surface-card border border-transparent transition-all hover:border-hairline hover:shadow-md hover:-translate-y-0.5 animate-fadeIn opacity-0 cursor-default group"
+              style={{ animationDelay: `${0.3 + i * 0.15}s`, animationFillMode: 'forwards' }}>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-semibold font-mono group-hover:bg-primary/15 transition-colors">
+                  {s.num}
+                </span>
+              </div>
               <h3 className="font-semibold mb-2 text-ink">{s.title}</h3>
               <p className="text-sm text-muted-soft leading-relaxed">{s.desc}</p>
-              {i < STEPS.length - 1 && (
-                <div className="hidden md:block absolute top-1/2 -right-4 text-2xl font-mono text-primary">→</div>
-              )}
             </div>
           ))}
         </div>
       </section>
 
+      {/* Gradient divider */}
+      <div className="max-w-5xl mx-auto px-4 md:px-6">
+        <div className="h-px bg-gradient-to-r from-transparent via-hairline to-transparent" />
+      </div>
+
       {/* CTA */}
-      <section className="px-6 py-16 md:py-24 max-w-4xl mx-auto border-t border-hairline">
-        <div className="text-center rounded-xl p-8 md:p-16 bg-primary">
-          <h2 className="font-display text-3xl font-normal leading-[1.15] mb-3 text-white"
-            style={{ letterSpacing: '-0.5px' }}>
-            Ready to generate?
-          </h2>
-          <p className="mb-8 max-w-md mx-auto" style={{ color: 'rgba(255,255,255,0.8)' }}>
-            Upload a document and pick your mode — paper or resume. AI does the rest.
-          </p>
-          <button onClick={() => navigate('/generate')}
-            className="text-sm font-medium rounded-md px-[18px] py-[10px] bg-white text-ink transition-opacity hover:opacity-90">
-            Get Started
-          </button>
+      <section className="px-6 py-20 md:py-28 max-w-4xl mx-auto">
+        <div className="relative text-center rounded-xl p-8 md:p-16 bg-primary overflow-hidden">
+          {/* Decorative circles */}
+          <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full bg-white/5 -translate-x-1/3 translate-y-1/3 pointer-events-none" />
+
+          <div className="relative">
+            <h2 className="font-display text-3xl md:text-4xl font-normal leading-[1.15] mb-3 text-white"
+              style={{ letterSpacing: '-0.5px' }}>
+              Ready to generate?
+            </h2>
+            <p className="mb-8 max-w-md mx-auto text-white/80 text-sm">
+              Upload a document and pick your mode — paper or resume. AI does the rest.
+            </p>
+            <button onClick={() => navigate('/generate')}
+              className="text-sm font-medium rounded-md px-[22px] py-[11px] bg-white text-ink transition-all hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.97]">
+              Get Started
+            </button>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-12 md:py-16 px-6 bg-surface-dark">
+      <footer className="py-12 md:py-16 px-6 bg-surface-dark border-t border-white/5">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm text-on-dark-soft flex items-center gap-2">
+          <span className="text-sm text-on-dark-soft flex items-center gap-2 transition-colors hover:text-on-dark">
             <LogoMark size={14} />
             PaperAI
           </span>
