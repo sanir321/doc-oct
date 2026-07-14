@@ -5,7 +5,7 @@ from config import OPENCODE_ZEN_API_KEY, OPENCODE_ZEN_BASE_URL, LLM_MODEL
 CONTENT_RULES = """Content Integrity Rules:
 - Author affiliation must be the actual institution — never fabricate or leave a placeholder affiliation (e.g., do not write "Indian Institute of Technology" for a non-IIT student).
 - Do not state quantitative results (latency numbers, satisfaction scores, benchmark data) unless they come from an actual measured test — otherwise phrase the section as "Proposed Architecture" / "System Design", not "Results."
-- Every reference must correspond to a real, verifiable source. Do not invent arXiv IDs, conference proceedings, or blog URLs to fill a References list.
+- Every reference must correspond to a real, verifiable source. Do not invent arXiv IDs, conference proceedings, or blog URLs to fill a References list. If no real references are available, omit the References section entirely rather than inventing them.
 - Single-author case: center the author block (use only the middle cell if the table has 3 columns, or a single centered cell — do not fabricate coauthors).
 - Write in plain, direct academic English. Avoid jargon, buzzwords, and unnecessarily complex phrasing. Use active voice where possible.
 - Prefer active voice over passive (e.g., "We trained the model" not "The model was trained").
@@ -15,25 +15,43 @@ CONTENT_RULES = """Content Integrity Rules:
 RESUME_CONTENT_RULE = """Content Integrity Rule:
 - Do not fabricate job titles, companies, degrees, or dates. Only include information the user has provided."""
 
-def call_llm(messages, temperature=0.7, max_tokens=8192):
-    resp = httpx.post(
-        f"{OPENCODE_ZEN_BASE_URL}/chat/completions",
-        headers={"Authorization": f"Bearer {OPENCODE_ZEN_API_KEY}"},
-        json={
-            "model": LLM_MODEL,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        },
-        timeout=300
-    )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+def call_llm(messages, temperature=0.7, max_tokens=8192, retries=3):
+    last_err = None
+    for attempt in range(retries):
+        try:
+            resp = httpx.post(
+                f"{OPENCODE_ZEN_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {OPENCODE_ZEN_API_KEY}"},
+                json={
+                    "model": LLM_MODEL,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                },
+                timeout=300
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            last_err = e
+            if attempt < retries - 1:
+                import time
+                time.sleep(1.5 ** attempt)
+    raise last_err or RuntimeError("call_llm failed")
 
 def call_llm_json(messages, temperature=0.3, max_tokens=4096):
     text = call_llm(messages, temperature, max_tokens).strip()
-    if text.startswith("```"): text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
-    return json.loads(text.strip())
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        import re
+        m = re.search(r'\{.*\}', text, re.DOTALL)
+        if m:
+            return json.loads(m.group())
+        raise
 
 def analyze_document(file_text: str) -> dict:
     prompt = f"""Read this document and extract IEEE paper information as JSON:
@@ -54,11 +72,16 @@ Document content:
         {"role": "user", "content": prompt}
     ])
 
+MAX_INTERVIEW_QUESTIONS = 10
+
 def generate_question(file_text: str, answers: dict, questions_asked: list, analysis: dict = None) -> dict:
     analysis = analysis or {}
     str_answers = {k: v for k, v in answers.items() if isinstance(k, str) and isinstance(v, str)}
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in str_answers.items() if not q.startswith("_")]) if str_answers else "No answers yet."
     qa_text = "\n".join([f"- {q}" for q in questions_asked]) if questions_asked else "None"
+
+    if len(questions_asked) >= MAX_INTERVIEW_QUESTIONS:
+        return {"ready": True}
 
     title_val = analysis.get("title", "")
     authors_val = analysis.get("authors") or []
@@ -74,7 +97,7 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
         if not answers.get("_title_ok") and not answers.get("_title_correct"):
             return {
                 "ready": False,
-                "question": f"I read your document and found the title: \"{title_val}\". Is that the title you want on the paper?",
+                "question": f'I read your document and found the title: "{title_val}". Is that the title you want on the paper?',
                 "options": ["Yes, that's correct", "No, I'll type a different title"],
                 "context": "Confirming the paper title.",
                 "type": "title_confirm"
@@ -94,7 +117,7 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
             return {
                 "ready": False,
                 "question": "Your document doesn't list any author names. Who should appear on the byline? (Separate multiple authors with semicolons.)",
-                "options": ["John Smith", "John Smith; Jane Doe"],
+                "options": [],
                 "context": "Author names are needed for the IEEE byline.",
                 "type": "authors"
             }
@@ -112,8 +135,8 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
     if authors_val and not answers.get("_affiliation_ok"):
         return {
             "ready": False,
-            "question": "Thanks. What is the institutional affiliation (university, lab, or company) for the author(s)?",
-            "options": ["MIT", "Stanford University", "Indian Institute of Technology"],
+            "question": "What is the institutional affiliation (university, lab, or company) for the author(s)?",
+            "options": [],
             "context": "Affiliation appears below each author name.",
             "type": "affiliation"
         }
@@ -123,17 +146,18 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
         return {
             "ready": False,
             "question": "And a contact email for the corresponding author, so readers can reach you?",
-            "options": ["author@example.com"],
+            "options": [],
             "context": "Email appears in the IEEE author block.",
             "type": "email"
         }
 
     # 5. KEYWORDS — only if the document didn't supply any
     if not keywords_val and not answers.get("_keywords_ok"):
+        domain_hint = analysis.get("domain", "your topic area")
         return {
             "ready": False,
-            "question": "Lastly, what keywords should I index this paper under? (Comma-separated, e.g. reinforcement learning, drones, navigation)",
-            "options": ["machine learning, robotics", "deep learning, control systems"],
+            "question": f"Lastly, what keywords should I index this paper under? (Comma-separated, e.g. {domain_hint}, machine learning, robotics)",
+            "options": [],
             "context": "Index Terms help readers find the paper.",
             "type": "keywords"
         }
@@ -151,32 +175,30 @@ def generate_question(file_text: str, answers: dict, questions_asked: list, anal
     if present:
         found.append("these sections: " + ", ".join(present))
     found_str = ", ".join(found) if found else "very little structured content"
-    miss_str = "; ".join(missing) if missing else "some details"
 
     prompt = f"""You are helping turn an uploaded document into an IEEE research paper. The bibliographic details (title, authors, affiliation, email, keywords) have already been collected from the user.
 
 What was found in the document: {found_str}.
-What appears to be missing or thin: {miss_str}.
 
 Previous answers from the user:
 {answers_text}
 
 Questions already asked: {qa_text}
 
-Your job: decide if you have enough to write a complete, accurate IEEE paper, or ask the user to fill ONE specific content gap.
+Your job: decide if you have enough to write a complete IEEE paper. You MUST return ready=true unless there is a SPECIFIC, ESSENTIAL piece of content missing that would make the paper impossible to write.
 
 {'The user has indicated they have no more data. Set ready=true and write the paper from what is available.' if user_said_no_more else ''}
 
 Rules:
-- If enough info exists, respond: {{"ready": true}}
-- Otherwise ask AT MOST 1 question, in plain, friendly, conversational English.
-- Reference what you already know; ask only about a genuinely missing detail (e.g. methodology, results, datasets, contributions).
+- For a literature survey / review paper, you need: a title, an abstract, an introduction, and a conclusion. The document provides the core content.
+- Return ready=true if you have ANY usable content from the document. The AI writing model can expand thin sections.
+- ONLY ask a question if the document has literally zero content to work with.
+- Do NOT ask about methodology, results, datasets, or contributions for a review paper — the model can infer these from the document.
 - Do NOT re-ask for title, authors, affiliation, email, or keywords — those are already collected.
-- Be generous about being ready; only ask if a key part of the paper cannot be written at all.
 
-If asking: {{"ready": false, "question": "...", "options": ["short example 1", "short example 2"], "context": "why needed"}}"""
+If leaving a gap: {{"ready": false, "question": "...", "context": "why needed", "options": []}}"""
     return call_llm_json([
-        {"role": "system", "content": f"You help write IEEE papers. Ask the user only about genuinely missing content, in friendly plain English. When the user has no more data, return ready=true.\n\n{CONTENT_RULES}"},
+        {"role": "system", "content": "You help write IEEE papers. You ALWAYS return ready=true unless the document has essentially no usable content. Be decisive."},
         {"role": "user", "content": f"Document: {file_text[:5000]}\n\n{prompt}"}
     ])
 
@@ -211,7 +233,6 @@ def generate_paper_stream(file_text: str, answers: dict, analysis: dict):
     domain = (analysis or {}).get("domain", "")
     keywords = (analysis or {}).get("keywords") or []
     present_sections = (analysis or {}).get("present_sections") or []
-    authors_list = (analysis or {}).get("authors") or ["Author A", "Author B"]
 
     domain_instruction = f" The paper should focus on {domain}." if domain else ""
     kw_instruction = f" Key topics: {', '.join(keywords)}." if keywords else ""
@@ -221,7 +242,7 @@ def generate_paper_stream(file_text: str, answers: dict, analysis: dict):
 
 Title: {title}{domain_instruction}{kw_instruction}{sections_instruction}
 
-Ground every claim in the document context below. You may invent plausible references (author, title, venue, year) and a brief professional bio for each author for a realistic bibliography and About the Authors section. Do NOT invent any numerical results, paper counts, statistics, or specific metrics not present in the document.
+Ground every claim in the document context below. You may include a brief professional bio for each author for the About the Authors section. Do NOT invent any numerical results, paper counts, statistics, or specific metrics not present in the document.
 
 Structure the paper with these ##-prefixed sections in order:
 - ## Abstract
@@ -316,6 +337,9 @@ def generate_resume_question(file_text: str, answers: dict, questions_asked: lis
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in str_answers.items() if not q.startswith("_")]) if str_answers else "No answers yet."
     qa_text = "\n".join([f"- {q}" for q in questions_asked]) if questions_asked else "None"
 
+    if len(questions_asked) >= MAX_INTERVIEW_QUESTIONS:
+        return {"ready": True}
+
     # Check what we already have from the document or user
     has_name = bool(analysis.get("name"))
     has_email = bool(analysis.get("email"))
@@ -339,7 +363,7 @@ def generate_resume_question(file_text: str, answers: dict, questions_asked: lis
         return {
             "ready": False,
             "question": "What is your full name?",
-            "options": ["John Smith"],
+            "options": [],
             "context": "Your name for the resume header.",
             "type": "name"
         }
@@ -357,7 +381,7 @@ def generate_resume_question(file_text: str, answers: dict, questions_asked: lis
         return {
             "ready": False,
             "question": "What is your email address for the resume?",
-            "options": ["john@example.com"],
+            "options": [],
             "context": "Contact email.",
             "type": "email"
         }
@@ -366,7 +390,7 @@ def generate_resume_question(file_text: str, answers: dict, questions_asked: lis
         return {
             "ready": False,
             "question": "What is your phone number?",
-            "options": ["+1 (555) 123-4567"],
+            "options": [],
             "context": "Phone number for the resume header.",
             "type": "phone"
         }
@@ -399,19 +423,18 @@ Previous answers from the user:
 
 Questions already asked: {qa_text}
 
-Your job: decide if you have enough to write a complete resume, or ask the user to fill ONE specific gap.
+Your job: decide if you have enough to write a complete resume. You MUST return ready=true unless a critical section (education or experience) is completely empty and the user has no more data to provide.
 
 {'The user has indicated they have no more data. Set ready=true and write the resume from what is available.' if user_said_no_more else ''}
 
 Rules:
-- If enough info exists, respond: {{"ready": true}}
-- Otherwise ask AT MOST 1 question about missing resume content (education, experience, skills, etc.)
+- Return ready=true if you have ANY content from the document. The AI can format and expand it.
+- ONLY ask a question if the document has basically no resume-relevant content at all.
 - Do NOT re-ask for name, email, or phone — those are already collected.
-- Be generous about being ready; only ask if a key resume section would be empty.
 
-If asking: {{"ready": false, "question": "...", "options": ["short example 1", "short example 2"], "context": "why needed"}}"""
+If leaving a gap: {{"ready": false, "question": "...", "options": [], "context": "why needed"}}"""
     return call_llm_json([
-        {"role": "system", "content": "You help build resumes. Ask about missing content (education, experience, skills). When enough info exists, return ready=true."},
+        {"role": "system", "content": "You help build resumes. You ALWAYS return ready=true unless the document has essentially no resume content. Be decisive."},
         {"role": "user", "content": f"Document: {file_text[:5000]}\n\n{prompt}"}
     ])
 

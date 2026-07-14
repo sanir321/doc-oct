@@ -1,8 +1,9 @@
+import asyncio, time
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 import uvicorn
-import os, re, uuid, tempfile, json
+import os, re, uuid, tempfile, json, shutil
 import PyPDF2
 from docx import Document
 from docx.oxml import OxmlElement
@@ -20,8 +21,27 @@ from services.llm_service import (
 app = FastAPI(title="Research Paper Generator")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-
+SESSION_TTL_MINUTES = 60
 sessions = {}
+_last_session_access = {}
+
+def _touch_session(sid: str):
+    _last_session_access[sid] = time.time()
+
+def _session_cleanup():
+    while True:
+        now = time.time()
+        stale = [sid for sid, t in _last_session_access.items() if now - t > SESSION_TTL_MINUTES * 60]
+        for sid in stale:
+            s = sessions.pop(sid, None)
+            _last_session_access.pop(sid, None)
+        time.sleep(300)
+
+@app.on_event("startup")
+async def _start_cleaner():
+    import threading
+    t = threading.Thread(target=_session_cleanup, daemon=True)
+    t.start()
 
 def _render_body(content):
     """Turn raw section text into HTML: paragraphs, markdown tables, captions."""
@@ -228,6 +248,7 @@ async def ask_question(session_id: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"], s.get("analysis"))
     if q_result.get("ready"):
@@ -242,6 +263,7 @@ async def submit_answer(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     question = data.get("question", "")
     answer = data.get("answer", "")
@@ -262,7 +284,7 @@ async def submit_answer(session_id: str, data: dict):
             s["_last_qtype"] = "authors_confirm_no"
             return {
                 "question": "Please type the correct author name(s), separated by semicolons.",
-                "options": ["John Smith", "John Smith; Jane Doe"],
+                "options": [],
                 "context": "Correct names for the paper byline.",
                 "type": "authors_confirm_no"
             }
@@ -344,10 +366,10 @@ def parse_paper_text(paper_text, analysis, session_id):
         stripped = line.strip()
         if not stripped:
             continue
-        if re.match(r'^#\s+\S', stripped) and not stripped.startswith("##"):
+        if not stripped.startswith("##") and re.match(r'^#\s+\S', stripped):
             md_title = stripped.lstrip("#").strip()
             start_idx = i + 1
-        break
+            break
 
     for line in lines[start_idx:]:
         stripped = line.strip()
@@ -441,6 +463,7 @@ def generate_stream(session_id: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     def event_stream():
         paper_text = ""
@@ -502,11 +525,25 @@ def generate_pdf_from_html(html_content: str) -> bytes:
             sections.append((t_clean, content, tables))
 
     def ascii_safe(t):
+        import unicodedata
         t = t.replace('\u2014', '--').replace('\u2013', '-')
         t = t.replace('\u2018', "'").replace('\u2019', "'")
         t = t.replace('\u201c', '"').replace('\u201d', '"')
         t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
+        t = t.replace('\u00b0', ' deg ')
+        t = t.replace('\u00b1', '+/-')
         t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
+        t = t.replace('\u03b1', 'alpha').replace('\u03b2', 'beta')
+        t = t.replace('\u03b3', 'gamma').replace('\u03b4', 'delta')
+        t = t.replace('\u03b8', 'theta').replace('\u03bb', 'lambda')
+        t = t.replace('\u03bc', 'mu').replace('\u03c0', 'pi')
+        t = t.replace('\u03c3', 'sigma').replace('\u03c9', 'omega')
+        t = t.replace('\u0394', 'Delta').replace('\u03a3', 'Sigma')
+        t = t.replace('\u2202', 'd').replace('\u2207', 'nabla')
+        t = t.replace('\u2211', 'sum').replace('\u221e', 'inf')
+        t = t.replace('\u2264', '<=').replace('\u2265', '>=')
+        t = t.replace('\u2260', '!=')
+        t = unicodedata.normalize('NFKD', t)
         return t.encode('ascii', 'replace').decode('ascii')
     sections = [(ascii_safe(t), ascii_safe(c), tables) for t, c, tables in sections]
     title = ascii_safe(title)
@@ -515,7 +552,7 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     authors = [(ascii_safe(n), ascii_safe(a), ascii_safe(e)) for n, a, e in authors]
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=False)
+    pdf.set_auto_page_break(auto=True, margin=20)
 
     ml = mr = 18
     mt = mb = 18
@@ -971,7 +1008,7 @@ def generate_ieee_docx(paper_json: dict) -> bytes:
 
 
 def build_markdown(title, abstract, sections, keywords, refs):
-    parts = [f"## Abstract\n{abstract}"]
+    parts = [f"# {title}", f"## Abstract\n{abstract}"]
     for sec in sections:
         parts.append(f"## {sec.get('title', '')}\n{sec.get('content', '')}")
     ref_lines = ["## References"]
@@ -1358,6 +1395,7 @@ async def set_mode(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     mode = data.get("mode", "ieee")
     s["mode"] = mode
@@ -1404,6 +1442,7 @@ async def ask_resume_question(session_id: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     q_result = generate_resume_question(
         s["file_text"], s["resume_answers"], s["resume_questions_asked"], s.get("resume_analysis")
@@ -1422,6 +1461,7 @@ async def submit_resume_answer(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     question = data.get("question", "")
     answer = data.get("answer", "")
@@ -1432,23 +1472,25 @@ async def submit_resume_answer(session_id: str, data: dict):
 
     # Handle structured fields
     if qtype in ("name", "name_confirm"):
-        if answer.lower().startswith("y") and s.get("resume_analysis", {}).get("name"):
-            pass  # keep analysis name from confirm
+        if qtype == "name":
+            s["resume_analysis"]["name"] = answer.strip()
+            s["resume_answers"]["_name_ok"] = True
+        elif answer.lower().startswith("y"):
+            s["resume_answers"]["_name_ok"] = True
         else:
-            # User typed a new name (or confirmed without "y" — still store it)
-            name = answer.replace("Yes, that's correct", "").replace("No, I'll type my name", "").strip()
-            if name:
-                s["resume_analysis"]["name"] = name
-        s["resume_answers"]["_name_ok"] = True
+            # User said no — clear extracted name so the next gate asks for typed input
+            s["resume_analysis"]["name"] = ""
+            s["resume_answers"]["_name_ok"] = False
 
     elif qtype in ("email", "email_confirm"):
-        if answer.lower().startswith("y") and s.get("resume_analysis", {}).get("email"):
-            pass  # keep analysis email from confirm
+        if qtype == "email":
+            s["resume_analysis"]["email"] = answer.strip()
+            s["resume_answers"]["_email_ok"] = True
+        elif answer.lower().startswith("y"):
+            s["resume_answers"]["_email_ok"] = True
         else:
-            email = answer.replace("Yes, that's correct", "").replace("No, I'll type a different email", "").strip()
-            if email:
-                s["resume_analysis"]["email"] = email
-        s["resume_answers"]["_email_ok"] = True
+            s["resume_analysis"]["email"] = ""
+            s["resume_answers"]["_email_ok"] = False
 
     elif qtype == "phone":
         phone = answer.strip()
@@ -1479,6 +1521,7 @@ def generate_resume_stream_endpoint(session_id: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     def event_stream():
         resume_text = ""
@@ -1520,6 +1563,7 @@ async def save_resume(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     resume_text = data.get("resume_text", s.get("resume_text", ""))
     s["resume_text"] = resume_text
@@ -1550,7 +1594,7 @@ async def edit_resume_endpoint(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
-
+    _touch_session(session_id)
     instruction = (data.get("instruction") or "").strip()
     if not instruction:
         raise HTTPException(400, "No instruction provided")
@@ -1582,11 +1626,22 @@ async def edit_resume_endpoint(session_id: str, data: dict):
     }
 
 
+@app.get("/api/preview-resume/{session_id}/{fmt}")
+async def preview_resume(session_id: str, fmt: str):
+    s = sessions.get(session_id)
+    if not s:
+        raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
+    if fmt == "html" and s.get("resume_html"):
+        return Response(content=s["resume_html"], media_type="text/html")
+    raise HTTPException(404, "Format not found")
+
 @app.get("/api/download-resume/{session_id}/{fmt}")
 async def download_resume(session_id: str, fmt: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
 
     rd = s.get("resume_data") or {}
     name = rd.get("name", "Resume").replace(" ", "_")
@@ -1605,6 +1660,8 @@ async def save_paper(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
+
     pj = data.get("paper_json", {})
     title = pj.get("title", s["analysis"].get("title", "Research Paper"))
     authors = [
@@ -1630,6 +1687,7 @@ async def save_paper(session_id: str, data: dict):
     return {
         "paper_text": paper_text,
         "html_content": html,
+        "preview_html": f"/api/preview/{session_id}/html",
         "download_html": f"/api/download/{session_id}/html",
         "filename_html": f"{base}.html",
         "download_docx": f"/api/download/{session_id}/docx",
@@ -1643,6 +1701,8 @@ async def edit_paper_endpoint(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
+
     instruction = (data.get("instruction") or "").strip()
     if not instruction:
         raise HTTPException(400, "No instruction provided")
@@ -1658,11 +1718,23 @@ async def edit_paper_endpoint(session_id: str, data: dict):
     return result
 
 
+@app.get("/api/preview/{session_id}/{fmt}")
+async def preview(session_id: str, fmt: str):
+    s = sessions.get(session_id)
+    if not s:
+        raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
+    if fmt == "html" and s.get("html_content"):
+        return Response(content=s["html_content"], media_type="text/html")
+    raise HTTPException(404, "Format not found")
+
 @app.get("/api/download/{session_id}/{fmt}")
 async def download(session_id: str, fmt: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
+
     base = s['analysis'].get('title', 'paper').replace(' ', '_')
     if fmt == "html" and s.get("html_content"):
         return Response(content=s["html_content"], media_type="text/html",

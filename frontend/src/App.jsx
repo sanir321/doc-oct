@@ -1,5 +1,52 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LogoMark from './components/LogoMark';
+
+function ProfileSetup({ onSave, onClose }) {
+  const [form, setForm] = useState({ name: '', course: '', degree: '', year: '' });
+  const valid = form.name.trim() && form.course.trim() && form.degree.trim() && form.year.trim();
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-hairline bg-surface-card shadow-xl p-6"
+        onClick={e => e.stopPropagation()}
+        style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+        <h2 className="text-lg font-semibold mb-1 text-ink">Create Profile</h2>
+        <p className="text-xs text-muted-soft mb-5">Tell us about yourself before we start</p>
+        <div className="space-y-3">
+          {[
+            { key: 'name', label: 'Full Name', placeholder: 'e.g. John Doe' },
+            { key: 'course', label: 'Course', placeholder: 'e.g. B.Tech Computer Science' },
+            { key: 'degree', label: 'Degree', placeholder: 'e.g. Bachelor of Technology' },
+            { key: 'year', label: 'Year', placeholder: 'e.g. 3rd Year' },
+          ].map(f => (
+            <div key={f.key}>
+              <label className="text-xs font-medium mb-1 block text-ink">{f.label}</label>
+              <input
+                value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                placeholder={f.placeholder}
+                className="w-full rounded-xl border border-hairline bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder:text-muted-soft outline-none focus:border-primary transition-colors"
+                onKeyDown={e => e.key === 'Enter' && valid && onSave(form)}
+                autoFocus={f.key === 'name'}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-5">
+          <button onClick={onClose}
+            className="flex-1 text-sm rounded-xl px-4 py-2.5 border border-hairline text-muted transition-colors hover:bg-canvas">
+            Cancel
+          </button>
+          <button onClick={() => onSave(form)} disabled={!valid}
+            className="flex-1 text-sm font-medium rounded-xl px-4 py-2.5 bg-primary text-white transition-all hover:opacity-90 disabled:opacity-40">
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const FEATURES = [
   {
@@ -37,9 +84,34 @@ const STEPS = [
 
 export default function App() {
   const navigate = useNavigate();
+  const [showProfile, setShowProfile] = useState(false);
+  const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem('userProfile');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleGetStarted = () => {
+    if (profile) {
+      navigate('/generate');
+    } else {
+      setShowProfile(true);
+    }
+  };
+
+  const saveProfile = (data) => {
+    localStorage.setItem('userProfile', JSON.stringify(data));
+    setProfile(data);
+    setShowProfile(false);
+    navigate('/generate');
+  };
 
   return (
     <div className="min-h-screen bg-canvas text-body">
+      {/* Profile Setup Modal */}
+      {showProfile && (
+        <ProfileSetup onSave={saveProfile} onClose={() => setShowProfile(false)} />
+      )}
+
       {/* Fixed Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-canvas/80 backdrop-blur-lg border-b border-hairline">
         <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
@@ -47,8 +119,13 @@ export default function App() {
             <LogoMark size={16} />
             PaperAI
           </span>
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/generate')}
+          <div className="flex items-center gap-3">
+            {profile && (
+              <span className="text-xs text-muted truncate max-w-[120px] hidden sm:block">
+                {profile.name}
+              </span>
+            )}
+            <button onClick={handleGetStarted}
               className="text-sm font-medium rounded-md px-[18px] py-[10px] bg-primary text-on-primary transition-all hover:opacity-90 hover:shadow-lg active:scale-[0.97]">
               Get Started
             </button>
@@ -81,7 +158,7 @@ export default function App() {
 
           <div className="flex flex-wrap justify-center gap-4 animate-fadeIn opacity-0"
             style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}>
-            <button onClick={() => navigate('/generate')}
+            <button onClick={handleGetStarted}
               className="text-sm font-medium rounded-md px-[22px] py-[11px] bg-primary text-on-primary transition-all hover:opacity-90 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.97]">
               Start Generating
             </button>
@@ -204,7 +281,7 @@ export default function App() {
             <p className="mb-8 max-w-md mx-auto text-white/80 text-sm">
               Upload a document and pick your mode — paper or resume. AI does the rest.
             </p>
-            <button onClick={() => navigate('/generate')}
+            <button onClick={handleGetStarted}
               className="text-sm font-medium rounded-md px-[22px] py-[11px] bg-white text-ink transition-all hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.97]">
               Get Started
             </button>

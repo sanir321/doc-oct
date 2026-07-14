@@ -164,6 +164,8 @@ export default function PaperWizard({ onNewSession }) {
   const [livePaper, setLivePaper] = useState('');
   const [result, setResult] = useState(null);
   const streamDone = useRef(false);
+  const evtSourceRef = useRef(null);
+  const evtSourceResumeRef = useRef(null);
   const [customAnswer, setCustomAnswer] = useState('');
   const [customFollowUp, setCustomFollowUp] = useState('');
   const chatEnd = useRef(null);
@@ -195,6 +197,12 @@ export default function PaperWizard({ onNewSession }) {
   const [resumeCustomAnswer, setResumeCustomAnswer] = useState('');
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, aiTyping]);
+  useEffect(() => {
+    return () => {
+      evtSourceRef.current?.close();
+      evtSourceResumeRef.current?.close();
+    };
+  }, []);
 
   const goStep = useCallback((s) => {
     setPrevStep(step);
@@ -303,7 +311,9 @@ export default function PaperWizard({ onNewSession }) {
     setGenerating(true); setError('');
     setLivePaper('');
     streamDone.current = false;
+    evtSourceRef.current?.close();
     const es = new EventSource(`${BASE}/api/generate-stream/${sessionId}`);
+    evtSourceRef.current = es;
     es.onmessage = (evt) => {
       try {
         const data = JSON.parse(evt.data);
@@ -453,7 +463,9 @@ export default function PaperWizard({ onNewSession }) {
     setResumeGenerating(true); setError('');
     setLiveResume('');
     streamDone.current = false;
+    evtSourceResumeRef.current?.close();
     const es = new EventSource(`${BASE}/api/generate-resume-stream/${sessionId}`);
+    evtSourceResumeRef.current = es;
     es.onmessage = (evt) => {
       try {
         const data = JSON.parse(evt.data);
@@ -1102,9 +1114,9 @@ export default function PaperWizard({ onNewSession }) {
                 <div className="flex-1 min-h-0">
                   <iframe
                     key={previewKey}
-                    src={apiService.getDownloadUrl(sessionId, "pdf")}
+                    src={result?.preview_html || apiService.getDownloadUrl(sessionId, "html")}
                     className="w-full h-full border-0"
-                    title="PDF Preview"
+                    title="Paper Preview"
                   />
                 </div>
               )}
@@ -1188,7 +1200,7 @@ export default function PaperWizard({ onNewSession }) {
                 <div className="flex-1 min-h-0">
                   <iframe
                     key={resumePreviewKey}
-                    src={apiService.getResumeDownloadUrl(sessionId, "html")}
+                    src={`${BASE}/api/preview-resume/${sessionId}/html`}
                     className="w-full h-full border-0"
                     title="Resume Preview"
                   />
