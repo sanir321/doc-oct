@@ -565,142 +565,144 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     content_w = pw - ml - mr
     col_gap = 6
     col_w = (content_w - col_gap) / 2
-    col_x = [ml, ml + col_w + col_gap]
-    bottom = 297 - mb
 
-    pdf = FPDF(orientation="P", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=mb)
+    class IEEE_PDF(FPDF):
+        def __init__(self):
+            super().__init__(orientation="P", unit="mm", format="A4")
+            self.col = 0
+            self.col_x = [ml, ml + col_w + col_gap]
+            self.col_w = col_w
+            self.mt = mt
+            self.b_margin = mb
+            self.set_margins(ml, mt, mr)
+            self.set_auto_page_break(auto=True, margin=mb)
 
-    state = {"col": 0, "y": mt}
+        def col_x_pos(self):
+            return self.col_x[self.col]
 
-    def ensure(h):
-        if state["y"] + h >= bottom:
-            if state["col"] == 0:
-                state["col"] = 1
-                state["y"] = mt
+        def col_ln(self, h=None):
+            if h is not None:
+                self.y += h
+            self.x = self.col_x_pos()
+            return self
+
+        def _perform_page_break(self):
+            if self.col == 0:
+                self.col = 1
+                self.x = self.col_x[1]
+                self.y = self.mt
             else:
-                pdf.add_page()
-                state["col"] = 0
-                state["y"] = mt
+                super()._perform_page_break()
+                self.x = self.col_x[0]
+                self.y = self.mt
+                self.col = 0
 
-    def para_height(w, h, txt):
-        pdf.set_font("Times", "", 10)
-        lines = pdf.multi_cell(w, h, txt, dry_run=True, output="LINES")
-        return len(lines) * h
+        def ensure_col(self, h):
+            if self.will_page_break(h):
+                self._perform_page_break()
 
-    def draw_smallcaps(x, y, w, text, size, line_h, align="C"):
-        # Build wrapped lines using mixed (small-caps) widths
-        def cwidth(ch):
-            pdf.set_font("Times", "", int(size * 0.72) if ch.islower() else size)
-            return pdf.get_string_width(ch.upper())
-        words = text.split()
-        lines, cur, curw = [], [], 0
-        sp = pdf.get_string_width(" ")
-        for word in words:
-            ww = sum(cwidth(ch) for ch in word)
-            if cur and curw + sp + ww > w:
+        def draw_smallcaps(self, text, size, line_h, align="C"):
+            x = self.x
+            y = self.y
+            w = self.col_w
+            def cwidth(ch):
+                self.set_font("Times", "", int(size * 0.72) if ch.islower() else size)
+                return self.get_string_width(ch.upper())
+            words = text.split()
+            lines, cur, curw = [], [], 0
+            sp = self.get_string_width(" ")
+            for word in words:
+                ww = sum(cwidth(ch) for ch in word)
+                if cur and curw + sp + ww > w:
+                    lines.append(" ".join(cur))
+                    cur, curw = [word], ww
+                else:
+                    if cur:
+                        curw += sp
+                    cur.append(word)
+                    curw += ww
+            if cur:
                 lines.append(" ".join(cur))
-                cur, curw = [word], ww
-            else:
-                if cur:
-                    curw += sp
-                cur.append(word)
-                curw += ww
-        if cur:
-            lines.append(" ".join(cur))
-        for li, line in enumerate(lines):
-            yy = y + li * line_h
-            total = sum(cwidth(ch) if ch != " " else sp for ch in line)
-            sx = x + (w - total) / 2 if align == "C" else x
-            pdf.set_xy(sx, yy)
-            for ch in line:
-                if ch == " ":
-                    pdf.set_font("Times", "", size)
-                    pdf.cell(sp, line_h, " ", new_x="RIGHT", new_y="TOP")
-                    continue
-                pdf.set_font("Times", "", int(size * 0.72) if ch.islower() else size)
-                wc = pdf.get_string_width(ch.upper())
-                pdf.cell(wc, line_h, ch.upper(), new_x="RIGHT", new_y="TOP")
-        pdf.set_font("Times", "", size)
-        return len(lines)
+            for li, line in enumerate(lines):
+                yy = y + li * line_h
+                total = sum(cwidth(ch) if ch != " " else sp for ch in line)
+                sx = x + (w - total) / 2 if align == "C" else x
+                self.set_xy(sx, yy)
+                for ch in line:
+                    if ch == " ":
+                        self.set_font("Times", "", size)
+                        self.cell(sp, line_h, " ", new_x="RIGHT", new_y="TOP")
+                        continue
+                    self.set_font("Times", "", int(size * 0.72) if ch.islower() else size)
+                    wc = self.get_string_width(ch.upper())
+                    self.cell(wc, line_h, ch.upper(), new_x="RIGHT", new_y="TOP")
+            self.set_font("Times", "", size)
+            self.set_xy(x, y + len(lines) * line_h)
+            return len(lines)
 
+    pdf = IEEE_PDF()
     pdf.add_page()
+    cy = mt
 
     # --- Title block (full width, single column) ---
     pdf.set_font("Times", "B", 20)
-    pdf.set_xy(ml, state["y"])
+    pdf.set_xy(ml, cy)
     pdf.multi_cell(content_w, 9, title, align="C", new_x="LMARGIN", new_y="NEXT")
-    state["y"] = pdf.get_y() + 3
+    cy = pdf.get_y() + 3
     for name, affil, email in authors:
-        pdf.set_xy(ml, state["y"])
+        pdf.set_xy(ml, cy)
         pdf.set_font("Times", "", 12)
         pdf.multi_cell(content_w, 6, name, align="C", new_x="LMARGIN", new_y="NEXT")
-        state["y"] = pdf.get_y()
+        cy = pdf.get_y()
         if affil:
-            pdf.set_xy(ml, state["y"])
+            pdf.set_xy(ml, cy)
             pdf.set_font("Times", "I", 10)
             pdf.multi_cell(content_w, 5, affil, align="C", new_x="LMARGIN", new_y="NEXT")
-            state["y"] = pdf.get_y()
+            cy = pdf.get_y()
         if email:
-            pdf.set_xy(ml, state["y"])
+            pdf.set_xy(ml, cy)
             pdf.set_font("Times", "", 10)
             pdf.multi_cell(content_w, 5, email, align="C", new_x="LMARGIN", new_y="NEXT")
-            state["y"] = pdf.get_y()
-    state["y"] += 3
+            cy = pdf.get_y()
+    cy += 3
     if abstract:
-        pdf.set_xy(ml, state["y"])
+        pdf.set_xy(ml, cy)
         pdf.set_font("Times", "I", 10)
         pdf.multi_cell(content_w, 5, f"Abstract - {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
-        state["y"] = pdf.get_y() + 2
+        cy = pdf.get_y() + 2
     if keywords:
-        pdf.set_xy(ml, state["y"])
+        pdf.set_xy(ml, cy)
         pdf.set_font("Times", "I", 10)
         pdf.multi_cell(content_w, 5, f"Index Terms - {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
-        state["y"] = pdf.get_y() + 4
+        cy = pdf.get_y() + 4
+
+    pdf.set_xy(pdf.col_x[0], cy)
+    pdf.col = 0
 
     # --- Body (two columns) ---
     for sec_title, sec_content, tables in sections:
         size, line_h = 10, 12
-        # Estimate header height before drawing
-        words = sec_title.split()
-        test_lines, cur_w = [], 0
-        sp = pdf.get_string_width(" ")
-        for word in words:
-            ww = pdf.get_string_width(word.upper())
-            if test_lines and cur_w + sp + ww > col_w:
-                test_lines.append(cur_w)
-                cur_w = ww
-            else:
-                cur_w += (sp if test_lines else 0) + ww
-        if cur_w:
-            test_lines.append(cur_w)
-        hdr_h = max(len(test_lines), 1) * line_h + 4
-        ensure(hdr_h)
-        n_lines = draw_smallcaps(col_x[state["col"]], state["y"], col_w, sec_title, size, line_h, "C")
-        state["y"] += n_lines * line_h + 2
+        hdr_h = 16
+        pdf.ensure_col(hdr_h)
+        n_lines = pdf.draw_smallcaps(sec_title, size, line_h, "C")
+        pdf.col_ln(n_lines * line_h + 2)
 
         for para in sec_content.split('\n'):
             para = para.strip()
             if not para:
                 continue
-            ph = para_height(col_w, 5, para)
-            ensure(ph + 1)
-            pdf.set_xy(col_x[state["col"]], state["y"])
             pdf.set_font("Times", "", 10)
-            pdf.multi_cell(col_w, 5, para, align="J", new_x="LEFT", new_y="NEXT")
-            state["y"] = pdf.get_y() + 1
+            pdf.multi_cell(pdf.col_w, 5, para, align="J", new_x="LEFT", new_y="NEXT")
+            pdf.x = pdf.col_x_pos()
 
         for heads, rows in tables:
             table_rows = ([heads] if heads else []) + rows
             for idx, row in enumerate(table_rows):
                 line = " | ".join(row)
-                rh = para_height(col_w, 5, line)
-                ensure(rh + 1)
-                pdf.set_xy(col_x[state["col"]], state["y"])
                 pdf.set_font("Times", "B" if (heads and idx == 0) else "", 9)
-                pdf.multi_cell(col_w, 5, line, align="L", new_x="LEFT", new_y="NEXT")
-                state["y"] = pdf.get_y() + 1
-            state["y"] += 2
+                pdf.multi_cell(pdf.col_w, 5, line, align="L", new_x="LEFT", new_y="NEXT")
+                pdf.x = pdf.col_x_pos()
+            pdf.col_ln(2)
 
     return bytes(pdf.output())
 
