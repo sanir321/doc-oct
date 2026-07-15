@@ -15,11 +15,11 @@ export const apiService = {
   },
 
   askQuestion(sessionId) {
-    return req(`${BASE}/api/ask/${sessionId}`, { method: 'POST' });
+    return req(`${BASE}/api/ask-paper/${sessionId}`, { method: 'POST' });
   },
 
   submitAnswer(sessionId, question, answer) {
-    return req(`${BASE}/api/answer/${sessionId}`, {
+    return req(`${BASE}/api/answer-paper/${sessionId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, answer }),
@@ -27,11 +27,11 @@ export const apiService = {
   },
 
   getDownloadUrl(sessionId, fmt="html") {
-    return `${BASE}/api/download/${sessionId}/${fmt}`;
+    return `${BASE}/api/download-paper/${sessionId}/${fmt}`;
   },
 
   savePaper(sessionId, paperJson) {
-    return req(`${BASE}/api/save/${sessionId}`, {
+    return req(`${BASE}/api/save-paper/${sessionId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paper_json: paperJson }),
@@ -39,7 +39,7 @@ export const apiService = {
   },
 
   editPaper(sessionId, instruction) {
-    return req(`${BASE}/api/edit/${sessionId}`, {
+    return req(`${BASE}/api/edit-paper/${sessionId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instruction }),

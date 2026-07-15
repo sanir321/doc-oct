@@ -243,8 +243,8 @@ async def upload_file(file: UploadFile = File(...)):
 
     return {"session_id": session_id}
 
-@app.post("/api/ask/{session_id}")
-async def ask_question(session_id: str):
+@app.post("/api/ask-paper/{session_id}")
+async def ask_paper_question(session_id: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
@@ -258,8 +258,8 @@ async def ask_question(session_id: str):
     s["_last_qtype"] = q_result.get("type", "")
     return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", ""), "type": q_result.get("type", "")}
 
-@app.post("/api/answer/{session_id}")
-async def submit_answer(session_id: str, data: dict):
+@app.post("/api/answer-paper/{session_id}")
+async def submit_paper_answer(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
@@ -465,8 +465,8 @@ def parse_paper_text(paper_text, analysis, session_id):
         "paper_json": paper_json,
     }
 
-@app.get("/api/generate-stream/{session_id}")
-def generate_stream(session_id: str):
+@app.get("/api/generate-paper-stream/{session_id}")
+def generate_paper_stream(session_id: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
@@ -1666,7 +1666,7 @@ async def download_resume(session_id: str, fmt: str):
     raise HTTPException(404, "Format not found")
 
 
-@app.post("/api/save/{session_id}")
+@app.post("/api/save-paper/{session_id}")
 async def save_paper(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
@@ -1707,7 +1707,7 @@ async def save_paper(session_id: str, data: dict):
     }
 
 
-@app.post("/api/edit/{session_id}")
+@app.post("/api/edit-paper/{session_id}")
 async def edit_paper_endpoint(session_id: str, data: dict):
     s = sessions.get(session_id)
     if not s:
@@ -1729,8 +1729,8 @@ async def edit_paper_endpoint(session_id: str, data: dict):
     return result
 
 
-@app.get("/api/preview/{session_id}/{fmt}")
-async def preview(session_id: str, fmt: str):
+@app.get("/api/preview-paper/{session_id}/{fmt}")
+async def preview_paper(session_id: str, fmt: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
@@ -1739,8 +1739,8 @@ async def preview(session_id: str, fmt: str):
         return Response(content=s["html_content"], media_type="text/html")
     raise HTTPException(404, "Format not found")
 
-@app.get("/api/download/{session_id}/{fmt}")
-async def download(session_id: str, fmt: str):
+@app.get("/api/download-paper/{session_id}/{fmt}")
+async def download_paper(session_id: str, fmt: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")

@@ -312,7 +312,7 @@ export default function PaperWizard({ onNewSession }) {
     setLivePaper('');
     streamDone.current = false;
     evtSourceRef.current?.close();
-    const es = new EventSource(`${BASE}/api/generate-stream/${sessionId}`);
+    const es = new EventSource(`${BASE}/api/generate-paper-stream/${sessionId}`);
     evtSourceRef.current = es;
     es.onmessage = (evt) => {
       try {
