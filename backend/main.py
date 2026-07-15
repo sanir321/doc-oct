@@ -466,7 +466,7 @@ def parse_paper_text(paper_text, analysis, session_id):
     }
 
 @app.get("/api/generate-paper-stream/{session_id}")
-def generate_paper_stream(session_id: str):
+def handle_generate_paper_stream(session_id: str):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
