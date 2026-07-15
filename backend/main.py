@@ -559,9 +559,6 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     keywords = ascii_safe(keywords)
     authors = [(ascii_safe(n), ascii_safe(a), ascii_safe(e)) for n, a, e in authors]
 
-    pdf = FPDF(orientation="P", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=20)
-
     ml = mr = 18
     mt = mb = 18
     pw = 210
@@ -571,10 +568,13 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     col_x = [ml, ml + col_w + col_gap]
     bottom = 297 - mb
 
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=mb)
+
     state = {"col": 0, "y": mt}
 
     def ensure(h):
-        if state["y"] + h > bottom:
+        if state["y"] + h >= bottom:
             if state["col"] == 0:
                 state["col"] = 1
                 state["y"] = mt
