@@ -770,13 +770,15 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
             if self.col == 0:
                 self.col = 1
                 self.x = self.col_x[1]
-                header_h = 6 if self.fmt.header_text else 0
-                self.y = self.mt + header_h
+                by = getattr(self, 'body_start_y', None)
+                if by is not None and self.page_no() == 1:
+                    self.y = by
+                else:
+                    self.y = self.mt + (6 if self.fmt.header_text else 0)
             else:
                 super()._perform_page_break()
                 self.x = self.col_x[0]
-                header_h = 6 if self.fmt.header_text else 0
-                self.y = self.mt + header_h
+                self.y = self.mt + (6 if self.fmt.header_text else 0)
                 self.col = 0
 
         def ensure_col(self, h):
@@ -872,6 +874,7 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
 
     pdf.set_xy(pdf.col_x[0], cy)
     pdf.col = 0
+    pdf.body_start_y = cy
 
     # --- Body (two columns) ---
     for sec_title, sec_content, tables in sections:
