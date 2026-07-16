@@ -15,6 +15,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from io import BytesIO
 from config import MAX_FILE_SIZE
+import fitz
 from services.llm_service import (
     analyze_document, generate_question, generate_paper_stream, edit_paper,
     analyze_document_for_resume, generate_resume_question, generate_resume_stream, edit_resume
@@ -76,8 +77,8 @@ async def _start_cleaner():
     t = threading.Thread(target=_session_cleanup, daemon=True)
     t.start()
 
-def _render_body(content):
-    """Turn raw section text into HTML: paragraphs, markdown tables, captions."""
+def _render_body(content, session_id=""):
+    """Turn raw section text into HTML: paragraphs, markdown tables, captions, images."""
     def esc(t):
         return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     def is_sep(line):
@@ -96,6 +97,7 @@ def _render_body(content):
             for r in body
         )
         return f'<table class="ieee-table"><thead><tr>{th}</tr></thead><tbody>{trs}</tbody></table>'
+    img_re = re.compile(r'!\[(.*?)\]\(([^)]+)\)')
 
     lines = [l.rstrip() for l in content.split("\n")]
     out, i, n = [], 0, len(lines)
@@ -103,6 +105,15 @@ def _render_body(content):
         line = lines[i]
         stripped = line.strip()
         if not stripped:
+            i += 1
+            continue
+        img_m = img_re.match(stripped)
+        if img_m:
+            alt = esc(img_m.group(1))
+            fname = img_m.group(2)
+            src = f"/api/session/{session_id}/image/{fname}" if session_id else fname
+            out.append(f'<div class="figure"><img src="{src}" alt="{alt}" />')
+            out.append(f'<div class="figcaption">{alt}</div></div>')
             i += 1
             continue
         if "|" in stripped and i + 1 < n and is_sep(lines[i + 1]):
@@ -119,12 +130,15 @@ def _render_body(content):
         para = [stripped]
         i += 1
         while i < n and lines[i].strip() and "|" not in lines[i] and not is_sep(lines[i]) and not is_caption(lines[i].strip()):
+            img_m2 = img_re.match(lines[i].strip())
+            if img_m2:
+                break
             para.append(lines[i].strip())
             i += 1
         out.append(f'<p>{esc(" ".join(para))}</p>')
     return "".join(out)
 
-def generate_ieee_html(title, authors, abstract, sections, keywords, domain, references=None):
+def generate_ieee_html(title, authors, abstract, sections, keywords, domain, references=None, session_id=""):
     # Build author HTML with per-affiliation superscript markers
     authors_html = ""
     if authors:
@@ -148,7 +162,7 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
         authors_html = "".join(author_parts)
 
     sections_html = "".join(
-        f'<div class="section"><h2>{s["title"]}</h2>{_render_body(s["content"])}</div>'
+        f'<div class="section"><h2>{s["title"]}</h2>{_render_body(s["content"], session_id)}</div>'
         for s in sections
     )
     keywords_str = ", ".join(keywords)
@@ -186,6 +200,9 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
   .section h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; letter-spacing: 0.5pt; }}
   .section h3 {{ font-size: 10pt; font-style: italic; font-weight: normal; text-align: left; margin: 9pt 0 3pt 0; font-family: "Times New Roman", Times, serif; }}
   .section p {{ text-align: justify; text-indent: 0.17in; margin-bottom: 0; line-height: 1.15; }}
+  .figure {{ text-align: center; margin: 10pt 0; break-inside: avoid; }}
+  .figure img {{ max-width: 100%; height: auto; }}
+  .figcaption {{ font-size: 9pt; font-style: italic; text-align: center; margin-top: 4pt; }}
   .caption {{ font-size: 10pt; font-variant: small-caps; text-align: left; margin: 6pt 0; font-family: "Times New Roman", Times, serif; }}
   table.ieee-table {{ border-collapse: collapse; width: 100%; font-size: 9pt; margin: 8px 0; }}
   table.ieee-table th, table.ieee-table td {{ border: 0.5pt solid black; padding: 3px 6px; text-align: center; }}
@@ -247,6 +264,73 @@ def extract_text(file_path: str, filename: str) -> str:
     with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
         return f.read()
 
+
+def extract_pdf_images(file_path: str, session_dir: str) -> list:
+    """Extract images from a PDF, save to session_dir/images/, return metadata."""
+    images_dir = os.path.join(session_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+    images = []
+    try:
+        doc = fitz.open(file_path)
+        for page_num in range(len(doc)):
+            for img_index, img in enumerate(doc.get_page_images(page_num)):
+                xref = img[0]
+                pix = fitz.Pixmap(doc, xref)
+                if pix.width < 100 or pix.height < 100:
+                    continue
+                if pix.n - pix.alpha > 3:
+                    pix = fitz.Pixmap(fitz.csRGB, pix)
+                ext = "png" if not img[2] else "jpeg"
+                fname = f"img_p{page_num+1}_{img_index+1}.{ext}"
+                fpath = os.path.join(images_dir, fname)
+                pix.save(fpath)
+                size_kb = os.path.getsize(fpath) / 1024
+                if size_kb < 5:
+                    os.remove(fpath)
+                    continue
+                images.append({
+                    "filename": fname, "path": fpath,
+                    "page": page_num + 1,
+                    "width": pix.width, "height": pix.height,
+                    "size_kb": round(size_kb, 1),
+                })
+                pix = None
+        doc.close()
+    except Exception:
+        pass
+    return images
+
+
+def extract_docx_images(file_path: str, session_dir: str) -> list:
+    """Extract images from a DOCX file."""
+    images_dir = os.path.join(session_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+    images = []
+    try:
+        doc = Document(file_path)
+        for i, rel in enumerate(doc.part.rels.values()):
+            if "image" in rel.reltype:
+                img = rel.target_part
+                ext = img.content_type.split("/")[-1]
+                if ext == "jpeg": ext = "jpg"
+                fname = f"img_docx_{i+1}.{ext}"
+                fpath = os.path.join(images_dir, fname)
+                with open(fpath, "wb") as f:
+                    f.write(img.blob)
+                size_kb = os.path.getsize(fpath) / 1024
+                if size_kb < 5:
+                    os.remove(fpath)
+                    continue
+                images.append({
+                    "filename": fname, "path": fpath,
+                    "page": 0, "width": 0, "height": 0,
+                    "size_kb": round(size_kb, 1),
+                })
+    except Exception:
+        pass
+    return images
+
+
 @app.get("/")
 async def root():
     return {"message": "Research Paper Generator", "status": "running"}
@@ -266,15 +350,38 @@ async def upload_file(file: UploadFile = File(...)):
     if not text.strip():
         raise HTTPException(400, "Could not extract text from file")
 
+    ext = os.path.splitext(file.filename)[1].lower()
+    images = []
+    if ext == ".pdf":
+        images = extract_pdf_images(file_path, tmp)
+    elif ext == ".docx":
+        images = extract_docx_images(file_path, tmp)
+
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
+        "session_dir": tmp,
         "file_text": text, "filename": file.filename,
         "answers": {}, "questions_asked": [],
         "ready": False, "analysis": {},
-        "paper_text": None
+        "paper_text": None,
+        "images": images,
     }
 
-    return {"session_id": session_id}
+    return {"session_id": session_id, "images_count": len(images)}
+
+@app.get("/api/session/{session_id}/image/{filename}")
+async def serve_session_image(session_id: str, filename: str):
+    s = sessions.get(session_id)
+    if not s:
+        raise HTTPException(404, "Session not found")
+    _touch_session(session_id)
+    full_path = os.path.join(s["session_dir"], "images", filename)
+    if not os.path.isfile(full_path):
+        raise HTTPException(404, "Image not found")
+    ext = os.path.splitext(filename)[1].lower()
+    media_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif"}
+    return Response(content=open(full_path, "rb").read(), media_type=media_map.get(ext, "image/png"))
+
 
 @app.post("/api/ask-paper/{session_id}")
 async def ask_paper_question(session_id: str):
@@ -477,7 +584,8 @@ def parse_paper_text(paper_text, analysis, session_id):
         sections=other_sections,
         keywords=analysis.get("keywords", [analysis.get("domain", "Technology")]),
         domain=analysis.get("domain", "Technology"),
-        references=refs
+        references=refs,
+        session_id=session_id,
     )
     paper_json = {
         "title": title,
@@ -508,7 +616,13 @@ def handle_generate_paper_stream(session_id: str):
     def event_stream():
         paper_text = ""
         try:
-            for token in generate_paper_stream(s["file_text"], s["answers"], s["analysis"]):
+            images_info = ""
+            if s.get("images"):
+                images_info = "\nExtracted images from document: " + ", ".join(
+                    f"{img['filename']} (page {img['page']}, {img['width']}x{img['height']})"
+                    for img in s["images"]
+                )
+            for token in generate_paper_stream(s["file_text"], s["answers"], s["analysis"], images_info):
                 paper_text += token
                 safe = token.replace("\n", "\\n").replace("\r", "\\r")
                 yield f"data: {json.dumps({'type': 'token', 'content': safe})}\n\n"
@@ -523,7 +637,7 @@ def handle_generate_paper_stream(session_id: str):
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
-def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat] = None) -> bytes:
+def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat] = None, images: Optional[list] = None, session_dir: str = "") -> bytes:
     from fpdf import FPDF
 
     fmt = paper_format or PROCOMM
@@ -553,6 +667,10 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
         t_clean = re.sub(r'<[^>]+>', '', t).strip()
         ps = re.findall(r'<p>(.*?)</p>', body, re.DOTALL)
         content = '\n\n'.join(re.sub(r'<[^>]+>', '', p).strip().replace('<br>', '\n') for p in ps if p.strip())
+        # Restore image references from figure divs back into content
+        figures = re.findall(r'<div class="figure">.*?<img src="[^"]*/([^"/]+)"[^>]*>.*?<div class="figcaption">(.*?)</div>', body, re.DOTALL)
+        for fname, alt in figures:
+            content += f'\n\n![{alt}]({fname})'
         tables = []
         for tbl in re.findall(r'<table class="ieee-table">(.*?)</table>', body, re.DOTALL):
             heads = [re.sub(r'<[^>]+>', '', h).strip() for h in re.findall(r'<th class="tablehead">(.*?)</th>', tbl)]
@@ -741,9 +859,31 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
         pdf.ensure_col(hdr_h)
         pdf.draw_section(sec_title, size, line_h)
 
+        img_re = re.compile(r'!\[(.*?)\]\(([^)]+)\)')
         for para in sec_content.split('\n'):
             para = para.strip()
             if not para:
+                continue
+            img_m = img_re.match(para)
+            if img_m:
+                fname = img_m.group(2)
+                alt = img_m.group(1)
+                img_path = os.path.join(session_dir, "images", fname) if session_dir else ""
+                if img_path and os.path.isfile(img_path):
+                    try:
+                        pw, _ = fmt.page_size_mm
+                        max_w = pdf.col_w - 4
+                        pdf.ensure_col(60)
+                        pdf.image(img_path, x=pdf.x + 2, w=min(max_w, pw * 0.4))
+                        pdf.col_ln(3)
+                        pdf.set_font(fmt.font_family, "I", 8)
+                        pdf.multi_cell(pdf.col_w, 4, alt, align="C", new_x="LEFT", new_y="NEXT")
+                        pdf.x = pdf.col_x_pos()
+                        pdf.col_ln(2)
+                    except Exception:
+                        pdf.set_font(fmt.font_family, "I", 8)
+                        pdf.multi_cell(pdf.col_w, 4, f"[Image: {alt}]", align="C", new_x="LEFT", new_y="NEXT")
+                        pdf.x = pdf.col_x_pos()
                 continue
             pdf.set_font(fmt.font_family, "", fmt.body_font_size)
             pdf.multi_cell(pdf.col_w, 5, para, align="J", new_x="LEFT", new_y="NEXT")
@@ -840,14 +980,35 @@ def _is_caption(s):
     return bool(re.match(r'^(figure|table)\s*\d*\.?\s', s, re.I))
 
 
-def _render_body_docx(doc, content):
-    """Parse body content text and add paragraphs and tables to the document."""
+def _render_body_docx(doc, content, session_dir=""):
+    """Parse body content text and add paragraphs, tables, and images to the document."""
+    img_re = re.compile(r'!\[(.*?)\]\(([^)]+)\)')
     lines = [l.rstrip() for l in content.split("\n")]
     i, n = 0, len(lines)
     while i < n:
         line = lines[i]
         stripped = line.strip()
         if not stripped:
+            i += 1
+            continue
+
+        # ---- Image ----
+        img_m = img_re.match(stripped)
+        if img_m:
+            fname = img_m.group(2)
+            alt = img_m.group(1)
+            img_path = os.path.join(session_dir, "images", fname) if session_dir else ""
+            if img_path and os.path.isfile(img_path):
+                try:
+                    p = doc.add_paragraph()
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    run = p.add_run()
+                    run.add_picture(img_path, width=Inches(3))
+                    p2 = doc.add_paragraph()
+                    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    _add_run(p2, alt, size=9, italic=True)
+                except Exception:
+                    pass
             i += 1
             continue
 
@@ -904,7 +1065,7 @@ def _render_body_docx(doc, content):
         _add_run(p, ' '.join(para), size=10)
 
 
-def generate_ieee_docx(paper_json: dict) -> bytes:
+def generate_ieee_docx(paper_json: dict, session_dir: str = "") -> bytes:
     """Generate a 3-section IEEE-format DOCX with continuous section breaks.
 
     Section 1 — single column: title, author table, abstract, keywords.
@@ -1035,7 +1196,7 @@ def generate_ieee_docx(paper_json: dict) -> bytes:
 
         # Body paragraphs
         if sec_content:
-            _render_body_docx(doc, sec_content)
+            _render_body_docx(doc, sec_content, session_dir)
 
     # ═══════════════════════════════════════════════════════════════
     # CONTINUOUS BREAK → SECTION 3  (two columns, references)
@@ -1808,11 +1969,11 @@ async def download_paper(session_id: str, fmt: str, format: str = Query("procomm
         return Response(content=s["html_content"], media_type="text/html",
                         headers={"Content-Disposition": f"attachment; filename={base}.html"})
     if fmt == "pdf" and s.get("html_content"):
-        pdf_bytes = generate_pdf_from_html(s["html_content"], paper_fmt)
+        pdf_bytes = generate_pdf_from_html(s["html_content"], paper_fmt, s.get("images"), s.get("session_dir", ""))
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={base}.pdf"})
     if fmt == "docx" and s.get("paper_json"):
-        docx_bytes = generate_ieee_docx(s["paper_json"])
+        docx_bytes = generate_ieee_docx(s["paper_json"], s.get("session_dir", ""))
         media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         return Response(content=docx_bytes, media_type=media,
                         headers={"Content-Disposition": f'attachment; filename="{base}.docx"'})

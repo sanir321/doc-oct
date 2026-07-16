@@ -237,7 +237,7 @@ Never include reasoning, chain-of-thought, or commentary — output only the rev
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
     return text.strip()
 
-def generate_paper_stream(file_text: str, answers: dict, analysis: dict):
+def generate_paper_stream(file_text: str, answers: dict, analysis: dict, images_info: str = ""):
     answers_text = "\n".join([f"Q: {q}\nA: {a}" for q, a in answers.items()]) if answers else ""
 
     title = (analysis or {}).get("title", "Research Paper")
@@ -271,9 +271,11 @@ Rules:
 - The ## References section must contain at least 5 IEEE-formatted references like: [1] J. Smith, "Title," Journal Name, vol. X, no. Y, pp. Z-Z, year.
 - The ## About the Authors section must list each author (bold name) with a 1–2 sentence professional biography.
 - If helpful, you may include one markdown table (using | separators) inside a body section, with a "Table 1. ..." caption line above it.
+- YOU MAY include images in the paper using markdown syntax: ![Figure caption](img_filename). Place them within the relevant body section (e.g., after the paragraph that discusses the figure). The system will render them as embedded figures with captions.
 - Never include reasoning, chain-of-thought, thinking blocks, or meta-commentary. Output only the paper content.
 
 Document context: {file_text[:12000]}
+{images_info}
 
 Author details: {answers_text}"""
     messages = [
