@@ -31,6 +31,8 @@ class PaperFormat:
     column_gap_mm: float = 6
     header_text: Optional[str] = None
     header_font_size: int = 9
+    footer_text: Optional[str] = None
+    footer_font_size: int = 9
     title_font_size: int = 20
     author_font_size: int = 12
     body_font_size: int = 10
@@ -47,9 +49,12 @@ PROCOMM = PaperFormat(
 
 IEMT = PaperFormat(
     name="IEMT",
-    header_text="36th International Electronic Manufacturing Technology Conference, 2014",
+    footer_text="36th International Electronic Manufacturing Technology Conference, 2014",
+    footer_font_size=10,
     abstract_bold_italic=False,
     section_centered=False,
+    title_font_size=12,
+    author_font_size=10,
 )
 
 app = FastAPI(title="Research Paper Generator")
@@ -360,7 +365,8 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(400, "File too large")
 
     tmp = tempfile.mkdtemp()
-    file_path = os.path.join(tmp, file.filename)
+    safe_name = os.path.basename(file.filename or "upload")
+    file_path = os.path.join(tmp, safe_name)
     with open(file_path, 'wb') as f:
         f.write(content)
 
@@ -394,10 +400,13 @@ async def serve_session_image(session_id: str, filename: str):
     if not s:
         raise HTTPException(404, "Session not found")
     _touch_session(session_id)
-    full_path = os.path.join(s["session_dir"], "images", filename)
+    safe_name = os.path.basename(filename)
+    if not safe_name:
+        raise HTTPException(400, "Invalid filename")
+    full_path = os.path.join(s["session_dir"], "images", safe_name)
     if not os.path.isfile(full_path):
         raise HTTPException(404, "Image not found")
-    ext = os.path.splitext(filename)[1].lower()
+    ext = os.path.splitext(safe_name)[1].lower()
     media_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif"}
     return Response(content=open(full_path, "rb").read(), media_type=media_map.get(ext, "image/png"))
 
@@ -415,7 +424,8 @@ async def ask_paper_question(session_id: str):
         return {"ready": True}
 
     s["_last_qtype"] = q_result.get("type", "")
-    return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", ""), "type": q_result.get("type", "")}
+    return {"question": q_result.get("question", ""), "options": q_result.get("options", []), 
+            "context": q_result.get("context", ""), "type": q_result.get("type", "")}
 
 @app.post("/api/answer-paper/{session_id}")
 async def submit_paper_answer(session_id: str, data: dict):
@@ -426,6 +436,8 @@ async def submit_paper_answer(session_id: str, data: dict):
 
     question = data.get("question", "")
     answer = data.get("answer", "")
+    if not isinstance(question, str):
+        return {"error": "question must be a string", "question": "", "options": [], "context": "", "type": ""}
     s["answers"][question] = answer
     s["questions_asked"].append(question)
 
@@ -484,14 +496,16 @@ async def submit_paper_answer(session_id: str, data: dict):
         s["answers"]["_title_ok"] = True
         s["answers"].pop("_need_typed_title", None)
 
-    # ponytail: skip the extra clarity-gate LLM call — always advance
-    q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"], s.get("analysis"))
+    try:
+        q_result = generate_question(s["file_text"], s["answers"], s["questions_asked"], s.get("analysis"))
+    except Exception:
+        q_result = {}
     if q_result.get("ready"):
         s["ready"] = True
-        return {"ready": True}
+        return {"ready": True, "question": "", "options": []}
 
     s["_last_qtype"] = q_result.get("type", "")
-    return {"question": q_result["question"], "options": q_result.get("options", []), "context": q_result.get("context", ""), "type": q_result.get("type", "")}
+    return {"question": q_result.get("question", ""), "options": q_result.get("options", []), "context": q_result.get("context", ""), "type": q_result.get("type", "")}
 
 def strip_reasoning(text):
     lines = text.split("\n")
@@ -757,6 +771,12 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
                 self.set_xy(ml, mt - 10)
                 self.cell(content_w, 5, self.fmt.header_text, align="C", new_x="LMARGIN", new_y="NEXT")
 
+        def footer(self):
+            if self.fmt.footer_text:
+                self.set_font(self.fmt.font_family, "", self.fmt.footer_font_size)
+                self.set_xy(ml, self.h - 12)
+                self.cell(content_w, 5, self.fmt.footer_text, align="C")
+
         def col_x_pos(self):
             return self.col_x[self.col]
 
@@ -851,7 +871,7 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
         cy = pdf.get_y()
         if affil:
             pdf.set_xy(ml, cy)
-            pdf.set_font(fmt.font_family, "I", 10)
+            pdf.set_font(fmt.font_family, "I" if fmt.abstract_bold_italic else "", 10)
             pdf.multi_cell(content_w, 5, affil, align="C", new_x="LMARGIN", new_y="NEXT")
             cy = pdf.get_y()
         if email:
@@ -862,9 +882,14 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
     cy += 3
     if abstract:
         pdf.set_xy(ml, cy)
-        font_style = "BI" if fmt.abstract_bold_italic else ""
-        pdf.set_font(fmt.font_family, font_style, 10)
-        pdf.multi_cell(content_w, 5, f"Abstract - {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+        if fmt.abstract_bold_italic:
+            pdf.set_font(fmt.font_family, "BI", 10)
+            pdf.multi_cell(content_w, 5, f"Abstract - {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
+        else:
+            pdf.set_font(fmt.font_family, "B", 10)
+            pdf.cell(content_w, 5, "Abstract", align="L", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font(fmt.font_family, "", fmt.body_font_size)
+            pdf.multi_cell(content_w, 5, abstract, align="J", new_x="LMARGIN", new_y="NEXT")
         cy = pdf.get_y() + 2
     if keywords:
         pdf.set_xy(ml, cy)
@@ -890,7 +915,7 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
                 continue
             img_m = img_re.match(para)
             if img_m:
-                fname = img_m.group(2)
+                fname = os.path.basename(img_m.group(2))
                 alt = img_m.group(1)
                 img_path = os.path.join(session_dir, "images", fname) if session_dir else ""
                 if img_path and os.path.isfile(img_path):
@@ -906,12 +931,12 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
                         pdf.ensure_col(total_h)
                         pdf.image(img_path, x=pdf.x + 2, w=min(max_w, pw_mm * 0.4))
                         pdf.col_ln(max(img_h_mm * 0.15, 3))
-                        pdf.set_font(fmt.font_family, "I", 8)
+                        pdf.set_font(fmt.font_family, "", fmt.body_font_size)
                         pdf.multi_cell(pdf.col_w, 4, alt, align="C", new_x="LEFT", new_y="NEXT")
                         pdf.x = pdf.col_x_pos()
                         pdf.col_ln(2)
                     except Exception:
-                        pdf.set_font(fmt.font_family, "I", 8)
+                        pdf.set_font(fmt.font_family, "", fmt.body_font_size)
                         pdf.multi_cell(pdf.col_w, 4, f"[Image: {alt}]", align="C", new_x="LEFT", new_y="NEXT")
                         pdf.x = pdf.col_x_pos()
                 continue
@@ -1025,7 +1050,7 @@ def _render_body_docx(doc, content, session_dir=""):
         # ---- Image ----
         img_m = img_re.match(stripped)
         if img_m:
-            fname = img_m.group(2)
+            fname = os.path.basename(img_m.group(2))
             alt = img_m.group(1)
             img_path = os.path.join(session_dir, "images", fname) if session_dir else ""
             if img_path and os.path.isfile(img_path):
@@ -1672,7 +1697,13 @@ async def set_mode(session_id: str, data: dict):
             s["resume_ready"] = True
             return {"mode": mode, "ready": True}
         s["_last_resume_qtype"] = q_result.get("type", "")
-        return {"mode": mode, "ready": False, "question": q_result}
+        return {
+            "mode": mode, "ready": False,
+            "question": q_result.get("question", ""),
+            "options": q_result.get("options", []),
+            "context": q_result.get("context", ""),
+            "type": q_result.get("type", ""),
+        }
 
     # IEEE mode — run analysis now
     try:
@@ -1692,7 +1723,14 @@ async def set_mode(session_id: str, data: dict):
     if question:
         s["_last_qtype"] = question.get("type", "")
 
-    return {"mode": mode, "analysis": analysis, "question": question}
+    return {
+        "mode": mode,
+        "analysis": analysis,
+        "question": question.get("question", "") if question else None,
+        "options": question.get("options", []) if question else [],
+        "context": question.get("context", "") if question else "",
+        "type": question.get("type", "") if question else "",
+    }
 
 
 @app.post("/api/ask-resume/{session_id}")
@@ -1710,9 +1748,8 @@ async def ask_resume_question(session_id: str):
         return {"ready": True}
 
     s["_last_resume_qtype"] = q_result.get("type", "")
-    return {"question": q_result["question"], "options": q_result.get("options", []),
+    return {"question": q_result.get("question", ""), "options": q_result.get("options", []),
             "context": q_result.get("context", ""), "type": q_result.get("type", "")}
-
 
 @app.post("/api/answer-resume/{session_id}")
 async def submit_resume_answer(session_id: str, data: dict):
@@ -1723,6 +1760,8 @@ async def submit_resume_answer(session_id: str, data: dict):
 
     question = data.get("question", "")
     answer = data.get("answer", "")
+    if not isinstance(question, str):
+        return {"error": "question must be a string", "question": "", "options": [], "context": "", "type": ""}
     s["resume_answers"][question] = answer
     s["resume_questions_asked"].append(question)
 
@@ -1762,15 +1801,18 @@ async def submit_resume_answer(session_id: str, data: dict):
         for question in [question]
     )
 
-    q_result = generate_resume_question(
-        s["file_text"], s["resume_answers"], s["resume_questions_asked"], s.get("resume_analysis")
-    )
+    try:
+        q_result = generate_resume_question(
+            s["file_text"], s["resume_answers"], s["resume_questions_asked"], s.get("resume_analysis")
+        )
+    except Exception:
+        q_result = {}
     if q_result.get("ready"):
         s["resume_ready"] = True
         return {"ready": True}
 
     s["_last_resume_qtype"] = q_result.get("type", "")
-    return {"question": q_result["question"], "options": q_result.get("options", []),
+    return {"question": q_result.get("question", ""), "options": q_result.get("options", []),
             "context": q_result.get("context", ""), "type": q_result.get("type", "")}
 
 

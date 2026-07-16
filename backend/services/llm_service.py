@@ -496,10 +496,13 @@ Rules:
 - Do NOT re-ask for name, email, or phone — those are already collected.
 
 If leaving a gap: {{"ready": false, "question": "...", "options": [], "context": "why needed"}}"""
-    return call_llm_json([
-        {"role": "system", "content": "You help build resumes. You ALWAYS return ready=true unless the document has essentially no resume content. Be decisive."},
-        {"role": "user", "content": f"Document: {file_text[:5000]}\n\n{prompt}"}
-    ])
+    try:
+        return call_llm_json([
+            {"role": "system", "content": "You help build resumes. You ALWAYS return ready=true unless the document has essentially no resume content. Be decisive."},
+            {"role": "user", "content": f"Document: {file_text[:5000]}\n\n{prompt}"}
+        ])
+    except Exception:
+        return {"ready": True}
 
 
 def generate_resume_stream(file_text: str, answers: dict, analysis: dict):
