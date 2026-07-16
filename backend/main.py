@@ -1,5 +1,7 @@
 import asyncio, time
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from dataclasses import dataclass, field
+from typing import Optional
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 import uvicorn
@@ -16,6 +18,37 @@ from config import MAX_FILE_SIZE
 from services.llm_service import (
     analyze_document, generate_question, generate_paper_stream, edit_paper,
     analyze_document_for_resume, generate_resume_question, generate_resume_stream, edit_resume
+)
+
+# ─── Paper Format presets ──────────────────────────────────────────────────────
+
+@dataclass
+class PaperFormat:
+    name: str
+    page_size_mm: tuple = (210, 297)
+    margins_mm: tuple = (18, 18, 18, 18)
+    column_gap_mm: float = 6
+    header_text: Optional[str] = None
+    header_font_size: int = 9
+    title_font_size: int = 20
+    author_font_size: int = 12
+    body_font_size: int = 10
+    section_font_size: int = 10
+    abstract_bold_italic: bool = True
+    section_centered: bool = True
+    font_family: str = "Times"
+
+PROCOMM = PaperFormat(
+    name="IEEE ProComm",
+    abstract_bold_italic=True,
+    section_centered=True,
+)
+
+IEMT = PaperFormat(
+    name="IEMT",
+    header_text="36th International Electronic Manufacturing Technology Conference, 2014",
+    abstract_bold_italic=False,
+    section_centered=False,
 )
 
 app = FastAPI(title="Research Paper Generator")
@@ -490,8 +523,10 @@ def handle_generate_paper_stream(session_id: str):
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
-def generate_pdf_from_html(html_content: str) -> bytes:
+def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat] = None) -> bytes:
     from fpdf import FPDF
+
+    fmt = paper_format or PROCOMM
 
     def extract_section(regex, html, group=1):
         m = re.search(regex, html, re.DOTALL)
@@ -503,7 +538,6 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     abstract = re.sub(r'<[^>]+>', '', abstract)
     keywords = re.sub(r'<[^>]+>', '', keywords)
 
-    # Authors (name, affiliation, email)
     author_blocks = re.findall(r'<div class="author">(.*?)</div>', html_content, re.DOTALL)
     authors = []
     for ab in author_blocks:
@@ -559,11 +593,10 @@ def generate_pdf_from_html(html_content: str) -> bytes:
     keywords = ascii_safe(keywords)
     authors = [(ascii_safe(n), ascii_safe(a), ascii_safe(e)) for n, a, e in authors]
 
-    ml = mr = 18
-    mt = mb = 18
-    pw = 210
+    pw, _ = fmt.page_size_mm
+    ml, mr, mt, mb = fmt.margins_mm
     content_w = pw - ml - mr
-    col_gap = 6
+    col_gap = fmt.column_gap_mm
     col_w = (content_w - col_gap) / 2
 
     class IEEE_PDF(FPDF):
@@ -574,8 +607,16 @@ def generate_pdf_from_html(html_content: str) -> bytes:
             self.col_w = col_w
             self.mt = mt
             self.b_margin = mb
+            self.fmt = fmt
+            self.header_drawn = False
             self.set_margins(ml, mt, mr)
             self.set_auto_page_break(auto=True, margin=mb)
+
+        def header(self):
+            if self.fmt.header_text and self.page_no() > 1:
+                self.set_font(self.fmt.font_family, "", self.fmt.header_font_size)
+                self.set_xy(ml, mt - 10)
+                self.cell(content_w, 5, self.fmt.header_text, align="C", new_x="LMARGIN", new_y="NEXT")
 
         def col_x_pos(self):
             return self.col_x[self.col]
@@ -590,11 +631,13 @@ def generate_pdf_from_html(html_content: str) -> bytes:
             if self.col == 0:
                 self.col = 1
                 self.x = self.col_x[1]
-                self.y = self.mt
+                header_h = 6 if self.fmt.header_text else 0
+                self.y = self.mt + header_h
             else:
                 super()._perform_page_break()
                 self.x = self.col_x[0]
-                self.y = self.mt
+                header_h = 6 if self.fmt.header_text else 0
+                self.y = self.mt + header_h
                 self.col = 0
 
         def ensure_col(self, h):
@@ -606,7 +649,7 @@ def generate_pdf_from_html(html_content: str) -> bytes:
             y = self.y
             w = self.col_w
             def cwidth(ch):
-                self.set_font("Times", "", int(size * 0.72) if ch.islower() else size)
+                self.set_font(self.fmt.font_family, "", int(size * 0.72) if ch.islower() else size)
                 return self.get_string_width(ch.upper())
             words = text.split()
             lines, cur, curw = [], [], 0
@@ -630,49 +673,61 @@ def generate_pdf_from_html(html_content: str) -> bytes:
                 self.set_xy(sx, yy)
                 for ch in line:
                     if ch == " ":
-                        self.set_font("Times", "", size)
+                        self.set_font(self.fmt.font_family, "", size)
                         self.cell(sp, line_h, " ", new_x="RIGHT", new_y="TOP")
                         continue
-                    self.set_font("Times", "", int(size * 0.72) if ch.islower() else size)
+                    self.set_font(self.fmt.font_family, "", int(size * 0.72) if ch.islower() else size)
                     wc = self.get_string_width(ch.upper())
                     self.cell(wc, line_h, ch.upper(), new_x="RIGHT", new_y="TOP")
-            self.set_font("Times", "", size)
+            self.set_font(self.fmt.font_family, "", size)
             self.set_xy(x, y + len(lines) * line_h)
             return len(lines)
 
+        def draw_section(self, sec_title, size, line_h):
+            if self.fmt.section_centered:
+                n = self.draw_smallcaps(sec_title, size, line_h, "C")
+                self.col_ln(n * line_h + 2)
+            else:
+                self.set_font(self.fmt.font_family, "B", size)
+                self.multi_cell(self.col_w, line_h * 0.7, sec_title, align="L", new_x="LEFT", new_y="NEXT")
+                self.x = self.col_x_pos()
+                self.col_ln(2)
+
     pdf = IEEE_PDF()
     pdf.add_page()
-    cy = mt
+    header_h = 6 if fmt.header_text else 0
+    cy = mt + header_h
 
     # --- Title block (full width, single column) ---
-    pdf.set_font("Times", "B", 20)
+    pdf.set_font(fmt.font_family, "B", fmt.title_font_size)
     pdf.set_xy(ml, cy)
     pdf.multi_cell(content_w, 9, title, align="C", new_x="LMARGIN", new_y="NEXT")
     cy = pdf.get_y() + 3
     for name, affil, email in authors:
         pdf.set_xy(ml, cy)
-        pdf.set_font("Times", "", 12)
+        pdf.set_font(fmt.font_family, "", fmt.author_font_size)
         pdf.multi_cell(content_w, 6, name, align="C", new_x="LMARGIN", new_y="NEXT")
         cy = pdf.get_y()
         if affil:
             pdf.set_xy(ml, cy)
-            pdf.set_font("Times", "I", 10)
+            pdf.set_font(fmt.font_family, "I", 10)
             pdf.multi_cell(content_w, 5, affil, align="C", new_x="LMARGIN", new_y="NEXT")
             cy = pdf.get_y()
         if email:
             pdf.set_xy(ml, cy)
-            pdf.set_font("Times", "", 10)
+            pdf.set_font(fmt.font_family, "", 10)
             pdf.multi_cell(content_w, 5, email, align="C", new_x="LMARGIN", new_y="NEXT")
             cy = pdf.get_y()
     cy += 3
     if abstract:
         pdf.set_xy(ml, cy)
-        pdf.set_font("Times", "I", 10)
+        font_style = "BI" if fmt.abstract_bold_italic else ""
+        pdf.set_font(fmt.font_family, font_style, 10)
         pdf.multi_cell(content_w, 5, f"Abstract - {abstract}", align="J", new_x="LMARGIN", new_y="NEXT")
         cy = pdf.get_y() + 2
     if keywords:
         pdf.set_xy(ml, cy)
-        pdf.set_font("Times", "I", 10)
+        pdf.set_font(fmt.font_family, "I", 10)
         pdf.multi_cell(content_w, 5, f"Index Terms - {keywords}", align="J", new_x="LMARGIN", new_y="NEXT")
         cy = pdf.get_y() + 4
 
@@ -681,17 +736,16 @@ def generate_pdf_from_html(html_content: str) -> bytes:
 
     # --- Body (two columns) ---
     for sec_title, sec_content, tables in sections:
-        size, line_h = 10, 12
+        size, line_h = fmt.body_font_size, fmt.body_font_size + 2
         hdr_h = 16
         pdf.ensure_col(hdr_h)
-        n_lines = pdf.draw_smallcaps(sec_title, size, line_h, "C")
-        pdf.col_ln(n_lines * line_h + 2)
+        pdf.draw_section(sec_title, size, line_h)
 
         for para in sec_content.split('\n'):
             para = para.strip()
             if not para:
                 continue
-            pdf.set_font("Times", "", 10)
+            pdf.set_font(fmt.font_family, "", fmt.body_font_size)
             pdf.multi_cell(pdf.col_w, 5, para, align="J", new_x="LEFT", new_y="NEXT")
             pdf.x = pdf.col_x_pos()
 
@@ -699,7 +753,7 @@ def generate_pdf_from_html(html_content: str) -> bytes:
             table_rows = ([heads] if heads else []) + rows
             for idx, row in enumerate(table_rows):
                 line = " | ".join(row)
-                pdf.set_font("Times", "B" if (heads and idx == 0) else "", 9)
+                pdf.set_font(fmt.font_family, "B" if (heads and idx == 0) else "", 9)
                 pdf.multi_cell(pdf.col_w, 5, line, align="L", new_x="LEFT", new_y="NEXT")
                 pdf.x = pdf.col_x_pos()
             pdf.col_ln(2)
@@ -1742,18 +1796,19 @@ async def preview_paper(session_id: str, fmt: str):
     raise HTTPException(404, "Format not found")
 
 @app.get("/api/download-paper/{session_id}/{fmt}")
-async def download_paper(session_id: str, fmt: str):
+async def download_paper(session_id: str, fmt: str, format: str = Query("procomm")):
     s = sessions.get(session_id)
     if not s:
         raise HTTPException(404, "Session not found")
     _touch_session(session_id)
 
+    paper_fmt = PROCOMM if format != "iemt" else IEMT
     base = s['analysis'].get('title', 'paper').replace(' ', '_')
     if fmt == "html" and s.get("html_content"):
         return Response(content=s["html_content"], media_type="text/html",
                         headers={"Content-Disposition": f"attachment; filename={base}.html"})
     if fmt == "pdf" and s.get("html_content"):
-        pdf_bytes = generate_pdf_from_html(s["html_content"])
+        pdf_bytes = generate_pdf_from_html(s["html_content"], paper_fmt)
         return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename={base}.pdf"})
     if fmt == "docx" and s.get("paper_json"):

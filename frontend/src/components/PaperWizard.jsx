@@ -179,6 +179,7 @@ export default function PaperWizard({ onNewSession }) {
   const [previewKey, setPreviewKey] = useState(0);
   const [editError, setEditError] = useState('');
   const [uploadHistory, setUploadHistory] = useState([]);
+  const [selectedFormat, setSelectedFormat] = useState('procomm');
 
   // Resume mode state
   const [mode, setMode] = useState(''); // '' | 'ieee' | 'resume'
@@ -858,7 +859,18 @@ export default function PaperWizard({ onNewSession }) {
           {(step === 3 || ready) && !result && !generating && (
             <div className="rounded-2xl border transition-all duration-200 bg-surface-card border-hairline">
               <div className="p-5 md:p-8 text-center">
-                <p className="text-base md:text-lg mb-4 font-display text-ink" style={{ letterSpacing: '-0.3px' }}>Ready to generate your IEEE-format paper</p>
+                <p className="text-base md:text-lg mb-4 font-display text-ink" style={{ letterSpacing: '-0.3px' }}>Ready to generate your paper</p>
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  <span className="text-xs font-mono uppercase text-muted">Format:</span>
+                  <button onClick={() => setSelectedFormat('procomm')}
+                    className={`rounded-full text-sm font-medium px-4 py-1.5 transition-all active:scale-[0.95] ${selectedFormat === 'procomm' ? 'bg-primary text-white' : 'bg-canvas text-muted border border-hairline'}`}>
+                    IEEE ProComm
+                  </button>
+                  <button onClick={() => setSelectedFormat('iemt')}
+                    className={`rounded-full text-sm font-medium px-4 py-1.5 transition-all active:scale-[0.95] ${selectedFormat === 'iemt' ? 'bg-primary text-white' : 'bg-canvas text-muted border border-hairline'}`}>
+                    IEMT
+                  </button>
+                </div>
                 <button onClick={handleGenerate}
                   className="rounded-full text-sm font-medium px-5 py-2.5 bg-primary text-white transition-all active:scale-[0.95]">
                   Generate Paper
@@ -1016,7 +1028,7 @@ export default function PaperWizard({ onNewSession }) {
                       Edit Document
                     </button>
                   )}
-                  <a href={apiService.getDownloadUrl(sessionId, "pdf")}
+                  <a href={apiService.getDownloadUrl(sessionId, "pdf", selectedFormat)}
                     className="rounded-full text-sm font-medium px-4 py-1.5 transition-all active:scale-[0.95] inline-flex items-center gap-1.5 bg-primary text-white"
                     download={result.filename_html.replace('.html', '.pdf')}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

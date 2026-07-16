@@ -26,8 +26,8 @@ export const apiService = {
     });
   },
 
-  getDownloadUrl(sessionId, fmt="html") {
-    return `${BASE}/api/download-paper/${sessionId}/${fmt}`;
+  getDownloadUrl(sessionId, fmt="html", paperFormat="procomm") {
+    return `${BASE}/api/download-paper/${sessionId}/${fmt}?format=${paperFormat}`;
   },
 
   savePaper(sessionId, paperJson) {
