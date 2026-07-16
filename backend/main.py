@@ -265,14 +265,30 @@ def extract_text(file_path: str, filename: str) -> str:
         return f.read()
 
 
-def extract_pdf_images(file_path: str, session_dir: str) -> list:
-    """Extract images from a PDF, save to session_dir/images/, return metadata."""
+def extract_text_per_page(file_path: str) -> dict:
+    """Extract text from a PDF keyed by page number (1-indexed)."""
+    pages = {}
+    try:
+        with open(file_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            for i, page in enumerate(reader.pages, 1):
+                t = page.extract_text()
+                if t.strip():
+                    pages[i] = t.strip()
+    except Exception:
+        pass
+    return pages
+
+
+def extract_pdf_images(file_path: str, session_dir: str, page_texts: Optional[dict] = None) -> list:
+    """Extract images from a PDF, save to session_dir/images/, return metadata with page context."""
     images_dir = os.path.join(session_dir, "images")
     os.makedirs(images_dir, exist_ok=True)
     images = []
     try:
         doc = fitz.open(file_path)
         for page_num in range(len(doc)):
+            page_text = (page_texts or {}).get(page_num + 1, "")
             for img_index, img in enumerate(doc.get_page_images(page_num)):
                 xref = img[0]
                 pix = fitz.Pixmap(doc, xref)
@@ -288,11 +304,13 @@ def extract_pdf_images(file_path: str, session_dir: str) -> list:
                 if size_kb < 5:
                     os.remove(fpath)
                     continue
+                context = page_text[:500] if page_text else ""
                 images.append({
                     "filename": fname, "path": fpath,
                     "page": page_num + 1,
                     "width": pix.width, "height": pix.height,
                     "size_kb": round(size_kb, 1),
+                    "context": context,
                 })
                 pix = None
         doc.close()
@@ -353,7 +371,8 @@ async def upload_file(file: UploadFile = File(...)):
     ext = os.path.splitext(file.filename)[1].lower()
     images = []
     if ext == ".pdf":
-        images = extract_pdf_images(file_path, tmp)
+        page_texts = extract_text_per_page(file_path)
+        images = extract_pdf_images(file_path, tmp, page_texts)
     elif ext == ".docx":
         images = extract_docx_images(file_path, tmp)
 
@@ -618,10 +637,12 @@ def handle_generate_paper_stream(session_id: str):
         try:
             images_info = ""
             if s.get("images"):
-                images_info = "\nExtracted images from document: " + ", ".join(
-                    f"{img['filename']} (page {img['page']}, {img['width']}x{img['height']})"
-                    for img in s["images"]
-                )
+                img_desc = []
+                for img in s["images"]:
+                    ctx = img.get("context", "")
+                    ctx_snippet = (" — near text: " + ctx[:120].replace("\n", " ")) if ctx else ""
+                    img_desc.append(f"  - {img['filename']} (page {img['page']}, {img['width']}x{img['height']}){ctx_snippet}")
+                images_info = "\nExtracted images from document (you can reference them with ![caption](filename) markdown):\n" + "\n".join(img_desc)
             for token in generate_paper_stream(s["file_text"], s["answers"], s["analysis"], images_info):
                 paper_text += token
                 safe = token.replace("\n", "\\n").replace("\r", "\\r")
@@ -871,11 +892,17 @@ def generate_pdf_from_html(html_content: str, paper_format: Optional[PaperFormat
                 img_path = os.path.join(session_dir, "images", fname) if session_dir else ""
                 if img_path and os.path.isfile(img_path):
                     try:
-                        pw, _ = fmt.page_size_mm
+                        from PIL import Image as PILImage
+                        with PILImage.open(img_path) as pim:
+                            iw, ih = pim.size
+                        pw_mm, _ = fmt.page_size_mm
                         max_w = pdf.col_w - 4
-                        pdf.ensure_col(60)
-                        pdf.image(img_path, x=pdf.x + 2, w=min(max_w, pw * 0.4))
-                        pdf.col_ln(3)
+                        scale = min(max_w, pw_mm * 0.4) / iw if iw > 0 else 0.5
+                        img_h_mm = ih * scale
+                        total_h = img_h_mm + 10
+                        pdf.ensure_col(total_h)
+                        pdf.image(img_path, x=pdf.x + 2, w=min(max_w, pw_mm * 0.4))
+                        pdf.col_ln(max(img_h_mm * 0.15, 3))
                         pdf.set_font(fmt.font_family, "I", 8)
                         pdf.multi_cell(pdf.col_w, 4, alt, align="C", new_x="LEFT", new_y="NEXT")
                         pdf.x = pdf.col_x_pos()
