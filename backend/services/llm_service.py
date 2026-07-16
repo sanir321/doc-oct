@@ -368,6 +368,52 @@ This paper has presented a structured overview of {kw_str} based on the source d
         time.sleep(0.02)
 
 
+def _generate_fallback_resume(file_text: str, answers: dict, analysis: dict):
+    analysis = analysis or {}
+    name = analysis.get("name") or "Your Name"
+    email = analysis.get("email") or ""
+    phone = analysis.get("phone") or ""
+    education = analysis.get("education") or []
+    experience = analysis.get("experience") or []
+    skills = analysis.get("skills") or []
+    summary = analysis.get("summary") or ""
+    projects = analysis.get("projects") or []
+    certifications = analysis.get("certifications") or []
+
+    lines = [f"# {name}", "", "## Summary", summary or "Professional with experience in technology."]
+    if education:
+        lines.append("")
+        lines.append("## Education")
+        for e in education:
+            lines.append(f"- {e}")
+    if experience:
+        lines.append("")
+        lines.append("## Experience")
+        for e in experience:
+            lines.append(f"- {e}")
+    if skills:
+        lines.append("")
+        lines.append("## Skills")
+        for s in skills:
+            lines.append(f"- {s}")
+    if projects:
+        lines.append("")
+        lines.append("## Projects")
+        for p in projects:
+            lines.append(f"- {p}")
+    if certifications:
+        lines.append("")
+        lines.append("## Certifications")
+        for c in certifications:
+            lines.append(f"- {c}")
+
+    text = "\n".join(lines)
+    for chunk in [text[i:i+100] for i in range(0, len(text), 100)]:
+        yield chunk
+        import time
+        time.sleep(0.02)
+
+
 def analyze_document_for_resume(file_text: str) -> dict:
     """Extract resume-relevant info from a document."""
     prompt = f"""Read this document and extract resume/CV information as JSON:
@@ -550,38 +596,42 @@ Additional details from user: {answers_text}"""
         {"role": "system", "content": "You write professional resumes in clean markdown. Use only ##-prefixed section headings. Output only the resume, never commentary."},
         {"role": "user", "content": prompt}
     ]
-    with httpx.Client(timeout=300) as client:
-        with client.stream(
-            "POST",
-            f"{OPENCODE_ZEN_BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {OPENCODE_ZEN_API_KEY}"},
-            json={
-                "model": LLM_MODEL,
-                "messages": messages,
-                "temperature": 0.5,
-                "max_tokens": 16384,
-                "stream": True,
-                "reasoning_effort": "none",
-            },
-        ) as resp:
-            resp.raise_for_status()
-            for line in resp.iter_lines():
-                if not line or not line.startswith("data: "):
-                    continue
-                payload = line[6:].strip()
-                if payload == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(payload)
-                    choices = chunk.get("choices")
-                    if not choices:
+    try:
+        with httpx.Client(timeout=300) as client:
+            with client.stream(
+                "POST",
+                f"{OPENCODE_ZEN_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {OPENCODE_ZEN_API_KEY}"},
+                json={
+                    "model": LLM_MODEL,
+                    "messages": messages,
+                    "temperature": 0.5,
+                    "max_tokens": 16384,
+                    "stream": True,
+                    "reasoning_effort": "none",
+                },
+            ) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line or not line.startswith("data: "):
                         continue
-                    delta = choices[0].get("delta", {})
-                    token = delta.get("content", "") or delta.get("reasoning", "")
-                    if token:
-                        yield token
-                except (json.JSONDecodeError, IndexError, KeyError):
-                    continue
+                    payload = line[6:].strip()
+                    if payload == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(payload)
+                        choices = chunk.get("choices")
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta", {})
+                        token = delta.get("content", "") or delta.get("reasoning", "")
+                        if token:
+                            yield token
+                    except (json.JSONDecodeError, IndexError, KeyError):
+                        continue
+    except Exception:
+        for token in _generate_fallback_resume(file_text, answers, analysis):
+            yield token
 
 
 def edit_resume(resume_text: str, instruction: str) -> str:
