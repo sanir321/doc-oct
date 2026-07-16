@@ -187,9 +187,9 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
   @page {{ size: letter; margin: 0.75in 0.65in; }}
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{ font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.15; color: #000; background: #fff; }}
-  .paper {{ max-width: 7.5in; margin: 0 auto; }}
-  h1 {{ font-size: 24pt; text-align: center; font-weight: bold; margin-bottom: 16px; font-family: "Times New Roman", Times, serif; letter-spacing: normal; }}
-  .authors {{ text-align: center; font-size: 12pt; margin-bottom: 18px; font-family: "Times New Roman", Times, serif; }}
+  .paper {{ max-width: 8.5in; margin: 0 auto; padding: 0.75in 0.65in; }}
+  h1 {{ font-size: 24pt; text-align: center; font-weight: bold; margin-bottom: 16px; }}
+  .authors {{ text-align: center; font-size: 12pt; margin-bottom: 18px; }}
   .author {{ display: inline-block; margin: 0 16px; }}
   .affil {{ font-size: 10pt; font-style: italic; }}
   .email {{ font-size: 10pt; }}
@@ -200,23 +200,25 @@ def generate_ieee_html(title, authors, abstract, sections, keywords, domain, ref
   .kw-label {{ font-size: 10pt; font-weight: bold; font-style: italic; }}
   .keywords {{ font-size: 10pt; margin-bottom: 12px; font-style: italic; }}
   .header {{ column-span: all; width: 100%; page-break-after: avoid; }}
-  .content {{ column-count: 2; column-gap: 0.25in; column-fill: auto; }}
-  .section {{ margin-bottom: 0; break-inside: avoid; }}
-  .section h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; letter-spacing: 0.5pt; }}
-  .section h3 {{ font-size: 10pt; font-style: italic; font-weight: normal; text-align: left; margin: 9pt 0 3pt 0; font-family: "Times New Roman", Times, serif; }}
+  .content {{ column-count: 2; column-gap: 0.3in; column-rule: 0.5pt solid #ccc; }}
+  .content::after {{ content: ""; display: table; clear: both; }}
+  .section {{ margin-bottom: 0; break-inside: avoid-column; }}
+  .section h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; letter-spacing: 0.5pt; }}
+  .section h3 {{ font-size: 10pt; font-style: italic; font-weight: normal; text-align: left; margin: 9pt 0 3pt 0; }}
   .section p {{ text-align: justify; text-indent: 0.17in; margin-bottom: 0; line-height: 1.15; }}
   .figure {{ text-align: center; margin: 10pt 0; break-inside: avoid; }}
   .figure img {{ max-width: 100%; height: auto; }}
   .figcaption {{ font-size: 9pt; font-style: italic; text-align: center; margin-top: 4pt; }}
-  .caption {{ font-size: 10pt; font-variant: small-caps; text-align: left; margin: 6pt 0; font-family: "Times New Roman", Times, serif; }}
+  .caption {{ font-size: 10pt; font-variant: small-caps; text-align: left; margin: 6pt 0; }}
   table.ieee-table {{ border-collapse: collapse; width: 100%; font-size: 9pt; margin: 8px 0; }}
   table.ieee-table th, table.ieee-table td {{ border: 0.5pt solid black; padding: 3px 6px; text-align: center; }}
   .tablehead {{ font-variant: small-caps; font-weight: bold; }}
   .tabletext {{ text-align: left; }}
   .references {{ margin-top: 12px; }}
-  .references h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; }}
+  .references h2 {{ font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; }}
   .references p {{ font-size: 9pt; margin-left: 0.25in; text-indent: -0.25in; line-height: 1.15; margin-bottom: 6pt; text-align: left; }}
-  @media print {{ body {{ padding: 0; }} }}
+  @media screen and (max-width: 700px) {{ .content {{ column-count: 1; }} }}
+  @media print {{ body {{ padding: 0; }} .paper {{ padding: 0; }} }}
 </style></head><body>
 <div class="paper">
   <div class="header">
