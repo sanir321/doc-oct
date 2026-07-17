@@ -1542,13 +1542,25 @@ def parse_resume_text(resume_text: str) -> dict:
                             # Try splitting remaining on comma
                             if "," in remaining:
                                 s, y = remaining.rsplit(",", 1)
-                                item["school"] = s.strip()
-                                item["year"] = y.strip()
+                                yy = y.strip()
+                                gpa_m = re.search(r'[Gg][Pp][Aa][:\s]*([\d.]+)', yy)
+                                if gpa_m:
+                                    item["gpa"] = gpa_m.group(1)
+                                    no_gpa = remaining.rsplit(",", 1)[0].strip()
+                                    if "," in no_gpa:
+                                        s2, y2 = no_gpa.rsplit(",", 1)
+                                        item["school"] = s2.strip()
+                                        item["year"] = y2.strip()
+                                    else:
+                                        item["school"] = no_gpa
+                                else:
+                                    item["school"] = s.strip()
+                                    item["year"] = yy
                             else:
                                 item["school"] = remaining
                         break
-                # Extract GPA if present
-                if "gpa" in raw.lower():
+                # Extract GPA if not already found
+                if "gpa" in raw.lower() and not item.get("gpa"):
                     gpa_m = re.search(r'[Gg][Pp][Aa][:\s]*([\d.]+)', raw)
                     if gpa_m:
                         item["gpa"] = gpa_m.group(1)
@@ -1655,7 +1667,7 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
         t = t.replace('\u201c', '"').replace('\u201d', '"')
         t = t.replace('\u00b2', '^2').replace('\u00b3', '^3')
         t = t.replace('\u00d7', 'x').replace('\u00f7', '/')
-        t = t.replace('\u2022', '-').replace('\u2023', '-')
+        t = t.replace('\u2022', '--').replace('\u2023', '-')
         return t.encode('ascii', 'replace').decode('ascii')
 
     name = ascii_safe(resume_data.get("name", "Resume"))
@@ -1773,7 +1785,7 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
                     if clean:
                         pdf.set_font("Helvetica", "", 9.5)
                         pdf.set_x(ml + 3)
-                        pdf.multi_cell(content_w - 5, 4.5, f"\u2022 {clean}", new_x="LMARGIN", new_y="NEXT")
+                        pdf.multi_cell(content_w - 5, 4.5, f"- {clean}", new_x="LMARGIN", new_y="NEXT")
             else:
                 pdf.set_font("Helvetica", "", 9)
                 pdf.set_x(ml)
@@ -1835,7 +1847,7 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
                     if clean:
                         pdf.set_font("Helvetica", "", 9.5)
                         pdf.set_x(ml + 3)
-                        pdf.multi_cell(content_w - 5, 4.5, f"\u2022 {clean}", new_x="LMARGIN", new_y="NEXT")
+                        pdf.multi_cell(content_w - 5, 4.5, f"- {clean}", new_x="LMARGIN", new_y="NEXT")
                 desc = ascii_safe(item.get("description", ""))
                 if desc and not item.get("bullets"):
                     pdf.set_font("Helvetica", "", 9)

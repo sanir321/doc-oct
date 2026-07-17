@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>John Smith - Resume</title>
+<style>
+  @page { size: letter; margin: 0.45in 0.5in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 10pt; color: #2d2d2d; line-height: 1.4; }
+  .resume { max-width: 7.5in; margin: 0 auto; padding: 0.35in 0.45in; }
+  .header { text-align: center; padding-bottom: 10px; margin-bottom: 14px; }
+  .header::after { content: ""; display: block; height: 2px; background: linear-gradient(to right, transparent, #1a5276, transparent); margin-top: 10px; }
+  .name { font-size: 24pt; font-weight: 700; color: #1a1a2e; letter-spacing: 1px; margin-bottom: 3px; }
+  .contact { font-size: 8.5pt; color: #555; line-height: 1.6; }
+  .ci-icon { font-weight: bold; color: #1a5276; margin-right: 1px; }
+  .section { margin-bottom: 12px; }
+  .section-title { font-size: 11pt; font-weight: 700; color: #1a5276; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1.5px solid #2980b9; padding-bottom: 2px; margin-bottom: 7px; }
+  .summary-text { font-size: 9.5pt; color: #444; line-height: 1.5; }
+  .item { margin-bottom: 9px; }
+  .item-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .item-title { font-weight: 700; font-size: 10pt; color: #1a1a2e; }
+  .item-date { color: #666; font-size: 9pt; white-space: nowrap; }
+  .item-subtitle { font-style: italic; color: #555; font-size: 9.5pt; margin-bottom: 2px; }
+  .item-detail { font-size: 9pt; color: #555; margin-top: 1px; }
+  .item-tech { font-size: 9pt; color: #2980b9; }
+  .item-link a { font-size: 8.5pt; color: #2980b9; text-decoration: none; }
+  .item-link a:hover { text-decoration: underline; }
+  ul.bullets { margin: 2px 0 0 14px; padding: 0; }
+  ul.bullets li { font-size: 9.5pt; color: #444; margin-bottom: 2px; line-height: 1.45; }
+  .project-desc { font-size: 9.5pt; color: #444; margin-top: 1px; }
+  .project-bullet { font-size: 9pt; color: #555; margin-left: 12px; }
+  .skills { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+  .skill { background: #eaf2f8; color: #1a5276; padding: 2px 10px; border-radius: 2px; font-size: 9pt; border: 1px solid #d4e6f1; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .resume { padding: 0; } .item-link a { text-decoration: none; } }
+</style></head><body>
+<div class="resume">
+  <div class="header">
+    <div class="name">John Smith</div>
+    <div class="contact"><span class="ci-icon">&#9993;</span> john.smith@email.com&nbsp;&nbsp;&nbsp;<span class="ci-icon">&#9742;</span> +1 555-0123</div>
+  </div>
+  <div class="section"><div class="section-title">Summary</div><p class="summary-text">Senior Software Engineer with expertise in machine learning systems, distributed architectures, and scalable backend development. Proven track record of leading engineering teams and delivering high-performance ML solutions at Google and Amazon. Strong foundation in computer science and machine learning from Stanford and MIT.</p></div><div class="section"><div class="section-title">Education</div><div class="item"><div class="item-header"><div class="item-title">Bachelor of Science in Computer Science</div><div class="item-date">GPA: 3.8</div></div><div class="item-subtitle">Stanford University, 2020</div><div class="item-detail">GPA: 3.8</div></div><div class="item"><div class="item-header"><div class="item-title">Master of Science in Machine Learning</div><div class="item-date">2022</div></div><div class="item-subtitle">MIT</div></div></div><div class="section"><div class="section-title">Experience</div><div class="item"><div class="item-header"><div class="item-title">Senior Software Engineer</div><div class="item-date">2022-2024</div></div><div class="item-subtitle">Google &middot; Mountain View, CA</div><ul class="bullets"><li>Led a team of 5 engineers building ML-based recommendation systems serving 10M+ users</li><li>Improved system latency by 40% through distributed caching and query optimization</li><li>Designed and deployed microservices architecture using Python, Go, and Kubernetes</li><li>Mentored 3 junior engineers through structured onboarding program</li></ul></div><div class="item"><div class="item-header"><div class="item-title">Machine Learning Engineer</div><div class="item-date">2020-2022</div></div><div class="item-subtitle">Amazon &middot; Seattle, WA</div><ul class="bullets"><li>Developed NLP pipelines for customer sentiment analysis processing 1M+ reviews daily</li><li>Built real-time data processing system using Apache Spark and Kafka</li><li>Reduced model inference time by 60% through quantization and model pruning</li></ul></div></div><div class="section"><div class="section-title">Skills</div><div class="skills"><span class="skill">Languages: Python, Go, Java, TypeScript, SQL</span><span class="skill">Frameworks: PyTorch, TensorFlow, FastAPI, React, Spring Boot</span><span class="skill">Tools: Kubernetes, Docker, AWS, GCP, Apache Spark, Kafka, PostgreSQL, Redis</span></div></div><div class="section"><div class="section-title">Projects</div><div class="item"><div class="item-header"><div class="item-title">Real-time Anomaly Detection System</div><div class="item-tech">Tech: Python, PyTorch, Kafka</div></div><p class="project-bullet">&bull; Built streaming anomaly detection system processing 100K+ events/second</p><p class="project-bullet">&bull; Reduced false positive rate by 35% using ensemble methods</p></div></div><div class="section"><div class="section-title">Certifications</div><div class="item"><div class="item-header"><div class="item-title">AWS Solutions Architect Professional</div></div></div><div class="item"><div class="item-header"><div class="item-title">Google Cloud Professional Data Engineer</div></div></div></div>
+</div>
+</body></html>
