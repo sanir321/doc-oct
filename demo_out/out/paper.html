@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>A Novel Hybrid Architecture for Classification Using Attention Mechanisms</title>
+<style>
+  @page { size: letter; margin: 0.75in 0.65in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.15; color: #000; background: #fff; }
+  .paper { max-width: 7.5in; margin: 0 auto; }
+  h1 { font-size: 24pt; text-align: center; font-weight: bold; margin-bottom: 16px; font-family: "Times New Roman", Times, serif; letter-spacing: normal; }
+  .authors { text-align: center; font-size: 12pt; margin-bottom: 18px; font-family: "Times New Roman", Times, serif; }
+  .author { display: inline-block; margin: 0 16px; }
+  .affil { font-size: 10pt; font-style: italic; }
+  .email { font-size: 10pt; }
+  sup { font-size: 8pt; vertical-align: super; line-height: 1; }
+  .abstract { margin: 12px 0; padding: 0; }
+  .abstract-label { font-size: 10pt; font-weight: bold; font-style: italic; }
+  .abstract p { font-size: 10pt; font-weight: bold; font-style: italic; text-align: justify; display: inline; }
+  .kw-label { font-size: 10pt; font-weight: bold; font-style: italic; }
+  .keywords { font-size: 10pt; margin-bottom: 12px; font-style: italic; }
+  .header { column-span: all; width: 100%; page-break-after: avoid; }
+  .content { column-count: 2; column-gap: 0.25in; column-fill: auto; }
+  .section { margin-bottom: 0; break-inside: avoid; }
+  .section h2 { font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; letter-spacing: 0.5pt; }
+  .section h3 { font-size: 10pt; font-style: italic; font-weight: normal; text-align: left; margin: 9pt 0 3pt 0; font-family: "Times New Roman", Times, serif; }
+  .section p { text-align: justify; text-indent: 0.17in; margin-bottom: 0; line-height: 1.15; }
+  .figure { text-align: center; margin: 10pt 0; break-inside: avoid; }
+  .figure img { max-width: 100%; height: auto; }
+  .figcaption { font-size: 9pt; font-style: italic; text-align: center; margin-top: 4pt; }
+  .caption { font-size: 10pt; font-variant: small-caps; text-align: left; margin: 6pt 0; font-family: "Times New Roman", Times, serif; }
+  table.ieee-table { border-collapse: collapse; width: 100%; font-size: 9pt; margin: 8px 0; }
+  table.ieee-table th, table.ieee-table td { border: 0.5pt solid black; padding: 3px 6px; text-align: center; }
+  .tablehead { font-variant: small-caps; font-weight: bold; }
+  .tabletext { text-align: left; }
+  .references { margin-top: 12px; }
+  .references h2 { font-size: 10pt; font-variant: small-caps; font-weight: bold; text-align: center; margin: 12pt 0 6pt 0; font-family: "Times New Roman", Times, serif; }
+  .references p { font-size: 9pt; margin-left: 0.25in; text-indent: -0.25in; line-height: 1.15; margin-bottom: 6pt; text-align: left; }
+  @media print { body { padding: 0; } }
+</style></head><body>
+<div class="paper">
+  <div class="header">
+    <h1>A Novel Hybrid Architecture for Classification Using Attention Mechanisms</h1>
+    <div class="authors"><div class="author">John A. Doe<sup>1</sup><br><span class="affil">Stanford University</span><br><span class="email">john@stanford.edu</span></div><div class="author">Jane B. Smith<sup>2</sup><br><span class="affil">MIT CSAIL</span><br><span class="email">jane@mit.edu</span></div></div>
+    <div class="abstract"><span class="abstract-label">Abstract - </span><p>We present a hybrid architecture achieving 97.3% accuracy on standard benchmarks.</p></div>
+    <div class="keywords"><span class="kw-label">Index Terms - </span>machine learning, classification, attention, deep learning</div>
+  </div>
+  <div class="content"><div class="section"><h2>1. Introduction</h2><p>Machine learning has revolutionized classification tasks across various domains. Recent advances in deep learning have led to significant improvements in accuracy and efficiency, particularly through the use of transformer architectures and attention mechanisms. However, existing approaches still face challenges in handling complex, high-dimensional data with imbalanced class distributions. In this paper we propose a novel hybrid architecture that addresses these limitations through an innovative three-stage pipeline combining convolutional feature extraction with attention-based classification. Our method achieves state-of-the-art results on standard benchmarks, outperforming existing methods by a significant margin.</p></div><div class="section"><h2>2. System Architecture</h2><p>Our proposed system adopts a three-tier architecture for efficient classification. The first tier handles data ingestion and preprocessing. The second tier performs feature extraction using a novel attention mechanism. The third tier implements the classification engine.</p><div class="figure"><img src="/api/session/demo/image/fig1_arch.jpeg" alt="System Architecture Overview" /><div class="figcaption">System Architecture Overview</div></div><div class="caption">Figure 1 illustrates the complete architecture. The preprocessing module handles input normalization. Features flow through a multi-head attention layer before reaching the classification head. The architecture is designed for real-time inference, processing over 1000 samples per second. Each component is modular and independently optimized.</div></div><div class="section"><h2>3. Experimental Results</h2><p>We evaluated our approach on the standard benchmark dataset containing 1800 samples. Our method achieves 97.3% accuracy, outperforming the next best method by 2.2 percentage points.</p><div class="figure"><img src="/api/session/demo/image/fig2_results.jpeg" alt="Accuracy Comparison" /><div class="figcaption">Accuracy Comparison</div></div><div class="caption">Figure 2 compares our method against baselines. Our architecture achieves superior performance across all metrics.</div><div class="figure"><img src="/api/session/demo/image/fig3_matrix.jpeg" alt="Confusion Matrix" /><div class="figcaption">Confusion Matrix</div></div><div class="caption">Figure 3 shows the confusion matrix. Low false positive and negative rates confirm robustness of our approach.</div></div><div class="section"><h2>4. Conclusion</h2><p>This paper presented a novel architecture achieving 97.3% accuracy. Future work will explore multi-modal learning and model compression for edge deployment.</p></div>
+  </div>
+</div>
+</body></html>

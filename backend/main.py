@@ -1303,16 +1303,26 @@ def build_markdown(title, abstract, sections, keywords, refs):
 # ─── Resume helpers ───────────────────────────────────────────────────────────
 
 def generate_resume_html(resume_data: dict) -> str:
-    """Render a clean single-column resume HTML."""
+    """Render a professional single-column resume HTML."""
     name = resume_data.get("name", "Your Name")
     email = resume_data.get("email", "")
     phone = resume_data.get("phone", "")
+    linkedin = resume_data.get("linkedin", "")
+    github = resume_data.get("github", "")
+    location = resume_data.get("location", "")
+
     contact_parts = []
+    if location:
+        contact_parts.append(f'<span class="ci-icon">&#9906;</span> {location}')
     if email:
-        contact_parts.append(email)
+        contact_parts.append(f'<span class="ci-icon">&#9993;</span> {email}')
     if phone:
-        contact_parts.append(phone)
-    contact_str = " &middot; ".join(contact_parts)
+        contact_parts.append(f'<span class="ci-icon">&#9742;</span> {phone}')
+    if linkedin:
+        contact_parts.append(f'<span class="ci-icon">in</span> {linkedin}')
+    if github:
+        contact_parts.append(f'<span class="ci-icon">&#9733;</span> {github}')
+    contact_str = '&nbsp;&nbsp;&nbsp;'.join(contact_parts)
 
     sections_html = ""
     section_order = ["Summary", "Education", "Experience", "Skills", "Projects", "Certifications"]
@@ -1322,7 +1332,8 @@ def generate_resume_html(resume_data: dict) -> str:
             continue
         sections_html += f'<div class="section"><div class="section-title">{section_name}</div>'
         if section_name == "Summary":
-            sections_html += f'<p>{items[0] if isinstance(items, list) else items}</p>'
+            text = items[0] if isinstance(items, list) else items
+            sections_html += f'<p class="summary-text">{text}</p>'
         elif section_name == "Skills":
             sections_html += '<div class="skills">'
             for skill in items:
@@ -1332,11 +1343,19 @@ def generate_resume_html(resume_data: dict) -> str:
             for item in items:
                 if isinstance(item, dict):
                     title = item.get("degree") or item.get("name") or item.get("text", "")
-                    sections_html += f'<div class="item"><div class="item-title">{title}</div>'
-                    if item.get("school"):
-                        sections_html += f'<div class="item-subtitle">{item["school"]}</div>'
-                    if item.get("year"):
-                        sections_html += f'<div class="item-date">{item["year"]}</div>'
+                    school = item.get("school", "")
+                    year = item.get("year", "")
+                    gpa = item.get("gpa", "")
+                    sections_html += '<div class="item">'
+                    sections_html += '<div class="item-header">'
+                    sections_html += f'<div class="item-title">{title}</div>'
+                    if year:
+                        sections_html += f'<div class="item-date">{year}</div>'
+                    sections_html += '</div>'
+                    if school:
+                        sections_html += f'<div class="item-subtitle">{school}</div>'
+                    if gpa:
+                        sections_html += f'<div class="item-detail">GPA: {gpa}</div>'
                     sections_html += '</div>'
                 else:
                     sections_html += f'<div class="item"><p>{item}</p></div>'
@@ -1344,14 +1363,24 @@ def generate_resume_html(resume_data: dict) -> str:
             for item in items:
                 if isinstance(item, dict):
                     title = item.get("role") or item.get("title") or ""
-                    sections_html += f'<div class="item"><div class="item-header"><span class="item-title">{title}</span>'
-                    if item.get("dates"):
-                        sections_html += f'<span class="item-date">{item["dates"]}</span>'
+                    company = item.get("company", "")
+                    dates = item.get("dates", "")
+                    location = item.get("location", "")
+                    sections_html += '<div class="item">'
+                    sections_html += '<div class="item-header">'
+                    sections_html += f'<div class="item-title">{title}</div>'
+                    if dates:
+                        sections_html += f'<div class="item-date">{dates}</div>'
                     sections_html += '</div>'
-                    if item.get("company"):
-                        sections_html += f'<div class="item-subtitle">{item["company"]}</div>'
-                    for bullet in item.get("bullets", []):
-                        sections_html += f'<p>&bull; {bullet}</p>'
+                    if company:
+                        loc_str = f" &middot; {location}" if location else ""
+                        sections_html += f'<div class="item-subtitle">{company}{loc_str}</div>'
+                    bullets = item.get("bullets", [])
+                    if bullets:
+                        sections_html += '<ul class="bullets">'
+                        for b in bullets:
+                            sections_html += f'<li>{b}</li>'
+                        sections_html += '</ul>'
                     sections_html += '</div>'
                 else:
                     sections_html += f'<div class="item"><p>{item}</p></div>'
@@ -1359,11 +1388,21 @@ def generate_resume_html(resume_data: dict) -> str:
             for item in items:
                 if isinstance(item, dict):
                     title = item.get("name") or item.get("title") or ""
-                    sections_html += f'<div class="item"><div class="item-title">{title}</div>'
-                    if item.get("description"):
-                        sections_html += f'<p>{item["description"]}</p>'
-                    for bullet in item.get("bullets", []):
-                        sections_html += f'<p>&bull; {bullet}</p>'
+                    tech = item.get("tech", "")
+                    link = item.get("link", "")
+                    sections_html += '<div class="item">'
+                    sections_html += '<div class="item-header">'
+                    sections_html += f'<div class="item-title">{title}</div>'
+                    if tech:
+                        sections_html += f'<div class="item-tech">{tech}</div>'
+                    sections_html += '</div>'
+                    if link:
+                        sections_html += f'<div class="item-link"><a href="{link}">{link}</a></div>'
+                    desc = item.get("description", "")
+                    if desc:
+                        sections_html += f'<p class="project-desc">{desc}</p>'
+                    for b in item.get("bullets", []):
+                        sections_html += f'<p class="project-bullet">&bull; {b}</p>'
                     sections_html += '</div>'
                 else:
                     sections_html += f'<div class="item"><p>{item}</p></div>'
@@ -1373,24 +1412,34 @@ def generate_resume_html(resume_data: dict) -> str:
 <html><head><meta charset="utf-8">
 <title>{name} - Resume</title>
 <style>
-  @page {{ size: letter; margin: 0.5in; }}
+  @page {{ size: letter; margin: 0.45in 0.5in; }}
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-  body {{ font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; color: #333; line-height: 1.45; }}
-  .resume {{ max-width: 7in; margin: 0 auto; padding: 0.4in; }}
-  .header {{ text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 12px; margin-bottom: 16px; }}
-  .name {{ font-size: 22pt; font-weight: bold; color: #2c3e50; margin-bottom: 4px; }}
-  .contact {{ font-size: 9pt; color: #666; }}
-  .section {{ margin-bottom: 14px; }}
-  .section-title {{ font-size: 11pt; font-weight: bold; color: #2c3e50; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #bdc3c7; padding-bottom: 3px; margin-bottom: 8px; }}
-  .item {{ margin-bottom: 10px; }}
+  body {{ font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 10pt; color: #2d2d2d; line-height: 1.4; }}
+  .resume {{ max-width: 7.5in; margin: 0 auto; padding: 0.35in 0.45in; }}
+  .header {{ text-align: center; padding-bottom: 10px; margin-bottom: 14px; }}
+  .header::after {{ content: ""; display: block; height: 2px; background: linear-gradient(to right, transparent, #1a5276, transparent); margin-top: 10px; }}
+  .name {{ font-size: 24pt; font-weight: 700; color: #1a1a2e; letter-spacing: 1px; margin-bottom: 3px; }}
+  .contact {{ font-size: 8.5pt; color: #555; line-height: 1.6; }}
+  .ci-icon {{ font-weight: bold; color: #1a5276; margin-right: 1px; }}
+  .section {{ margin-bottom: 12px; }}
+  .section-title {{ font-size: 11pt; font-weight: 700; color: #1a5276; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1.5px solid #2980b9; padding-bottom: 2px; margin-bottom: 7px; }}
+  .summary-text {{ font-size: 9.5pt; color: #444; line-height: 1.5; }}
+  .item {{ margin-bottom: 9px; }}
   .item-header {{ display: flex; justify-content: space-between; align-items: baseline; }}
-  .item-title {{ font-weight: bold; font-size: 10pt; }}
-  .item-date {{ font-style: italic; color: #666; font-size: 9pt; }}
+  .item-title {{ font-weight: 700; font-size: 10pt; color: #1a1a2e; }}
+  .item-date {{ color: #666; font-size: 9pt; white-space: nowrap; }}
   .item-subtitle {{ font-style: italic; color: #555; font-size: 9.5pt; margin-bottom: 2px; }}
-  .item p {{ font-size: 9.5pt; margin-top: 2px; }}
-  .skills {{ display: flex; flex-wrap: wrap; gap: 5px; }}
-  .skill {{ background: #ecf0f1; padding: 3px 10px; border-radius: 3px; font-size: 9pt; color: #333; }}
-  @media print {{ body {{ padding: 0; }} .resume {{ padding: 0; }} }}
+  .item-detail {{ font-size: 9pt; color: #555; margin-top: 1px; }}
+  .item-tech {{ font-size: 9pt; color: #2980b9; }}
+  .item-link a {{ font-size: 8.5pt; color: #2980b9; text-decoration: none; }}
+  .item-link a:hover {{ text-decoration: underline; }}
+  ul.bullets {{ margin: 2px 0 0 14px; padding: 0; }}
+  ul.bullets li {{ font-size: 9.5pt; color: #444; margin-bottom: 2px; line-height: 1.45; }}
+  .project-desc {{ font-size: 9.5pt; color: #444; margin-top: 1px; }}
+  .project-bullet {{ font-size: 9pt; color: #555; margin-left: 12px; }}
+  .skills {{ display: flex; flex-wrap: wrap; gap: 4px 6px; }}
+  .skill {{ background: #eaf2f8; color: #1a5276; padding: 2px 10px; border-radius: 2px; font-size: 9pt; border: 1px solid #d4e6f1; }}
+  @media print {{ body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} .resume {{ padding: 0; }} .item-link a {{ text-decoration: none; }} }}
 </style></head><body>
 <div class="resume">
   <div class="header">
@@ -1408,6 +1457,9 @@ def parse_resume_text(resume_text: str) -> dict:
         "name": "",
         "email": "",
         "phone": "",
+        "linkedin": "",
+        "github": "",
+        "location": "",
         "summary": [],
         "education": [],
         "experience": [],
@@ -1427,10 +1479,34 @@ def parse_resume_text(resume_text: str) -> dict:
         "certifications": "certifications",
     }
 
+    def extract_email(s):
+        m = re.search(r'[\w.+-]+@[\w-]+\.[\w.-]+', s)
+        return m.group(0) if m else ""
+
+    def extract_phone(s):
+        m = re.search(r'[\+]?[\d\-\(\)\s]{7,}', s)
+        return m.group(0).strip() if m else ""
+
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("```"):
             continue
+
+        # Try to extract contact info from first few lines before sections
+        if not any(stripped.startswith("#") for s in ["## ", "### "]):
+            if current_section is None:
+                if not result["name"] and not stripped.startswith(("- ", "* ")):
+                    if "linkedin" in stripped.lower():
+                        result["linkedin"] = stripped.replace("- ", "").replace("* ", "").strip()
+                    elif "github" in stripped.lower():
+                        result["github"] = stripped.replace("- ", "").replace("* ", "").strip()
+                    elif "@" in stripped:
+                        result["email"] = extract_email(stripped) or stripped.strip()
+                    elif re.search(r'[\+]?\d[\d\-\(\)\s]{7,}', stripped):
+                        result["phone"] = extract_phone(stripped)
+                    else:
+                        # If no section started, this might be contact line
+                        pass
 
         # H2 section heading
         if stripped.startswith("## "):
@@ -1443,41 +1519,117 @@ def parse_resume_text(resume_text: str) -> dict:
             continue
 
         if current_section == "summary":
-            result["summary"].append(stripped)
+            result["summary"].append(stripped.lstrip("- ").lstrip("* ").strip())
         elif current_section == "skills":
-            # Strip bullet points and markdown bold markers
             clean = stripped.lstrip("- ").lstrip("* ").strip()
             clean = clean.replace("**", "").replace("__", "").strip()
             if clean:
                 result["skills"].append(clean)
-        elif current_section in ("education", "certifications"):
+        elif current_section == "education":
+            if stripped.startswith("### ") or stripped.startswith("**"):
+                raw = stripped.lstrip("#").strip().replace("**", "").replace("__", "").strip()
+                # Try to parse "Degree — School, Year" or "Degree | School | Year"
+                item = {"text": raw}
+                for sep in [" — ", " | ", " - ", " – "]:
+                    parts = raw.split(sep, 2)
+                    if len(parts) >= 2:
+                        item["degree"] = parts[0].strip()
+                        remaining = parts[1].strip()
+                        if len(parts) >= 3:
+                            item["school"] = remaining
+                            item["year"] = parts[2].strip()
+                        else:
+                            # Try splitting remaining on comma
+                            if "," in remaining:
+                                s, y = remaining.rsplit(",", 1)
+                                item["school"] = s.strip()
+                                item["year"] = y.strip()
+                            else:
+                                item["school"] = remaining
+                        break
+                # Extract GPA if present
+                if "gpa" in raw.lower():
+                    gpa_m = re.search(r'[Gg][Pp][Aa][:\s]*([\d.]+)', raw)
+                    if gpa_m:
+                        item["gpa"] = gpa_m.group(1)
+                result["education"].append(item)
+            elif stripped.startswith("- ") or stripped.startswith("* "):
+                clean = stripped[2:].strip().replace("**", "").replace("__", "")
+                result["education"].append({"text": clean})
+            else:
+                result["education"].append({"text": stripped.replace("**", "").replace("__", "")})
+        elif current_section == "certifications":
             if stripped.startswith("- ") or stripped.startswith("* "):
                 clean = stripped[2:].strip().replace("**", "").replace("__", "")
-                result[current_section].append({"text": clean})
+                result["certifications"].append({"text": clean})
             elif stripped.startswith("**") or stripped.startswith("###"):
                 clean = stripped.lstrip("#").strip().replace("**", "").replace("__", "").strip()
-                result[current_section].append({"text": clean})
+                result["certifications"].append({"text": clean})
             else:
-                result[current_section].append({"text": stripped.replace("**", "").replace("__", "")})
-        elif current_section in ("experience", "projects"):
-            if stripped.startswith("### ") or stripped.startswith("**"):
-                title = stripped.lstrip("#").strip().replace("**", "").replace("__", "").strip()
-                current_item = {"title": title, "bullets": []}
-                result[current_section].append(current_item)
+                result["certifications"].append({"text": stripped.replace("**", "").replace("__", "")})
+        elif current_section == "experience":
+            if stripped.startswith("### "):
+                raw = stripped[4:].strip().replace("**", "").replace("__", "").strip()
+                # Parse "Role | Company | Location | Dates"
+                item = {"title": raw, "bullets": []}
+                parts = [p.strip() for p in raw.replace(" — ", " | ").replace(" – ", " | ").split("|")]
+                if len(parts) >= 1:
+                    item["role"] = parts[0].strip()
+                if len(parts) >= 2:
+                    item["company"] = parts[1].strip()
+                if len(parts) >= 3:
+                    # Could be location or dates
+                    if any(kw in parts[2].lower() for kw in ("present", "20", "19")):
+                        item["dates"] = parts[2].strip()
+                    else:
+                        item["location"] = parts[2].strip()
+                if len(parts) >= 4:
+                    item["dates"] = parts[3].strip()
+                current_item = item
+                result["experience"].append(current_item)
             elif stripped.startswith("- ") or stripped.startswith("* "):
                 bullet = stripped[2:].strip().replace("**", "").replace("__", "")
                 if current_item:
                     current_item["bullets"].append(bullet)
                 else:
-                    current_item = {"title": "", "bullets": [bullet]}
-                    result[current_section].append(current_item)
+                    current_item = {"title": "", "role": "", "bullets": [bullet]}
+                    result["experience"].append(current_item)
             else:
                 clean = stripped.replace("**", "").replace("__", "")
                 if current_item:
                     current_item["bullets"].append(clean)
                 else:
-                    current_item = {"title": clean, "bullets": []}
-                    result[current_section].append(current_item)
+                    current_item = {"title": clean, "role": clean, "bullets": []}
+                    result["experience"].append(current_item)
+        elif current_section == "projects":
+            if stripped.startswith("### ") or stripped.startswith("**"):
+                raw = stripped.lstrip("#").strip().replace("**", "").replace("__", "").strip()
+                # Parse "Name | Tech" link
+                item = {"title": raw, "name": raw, "bullets": []}
+                if " | " in raw:
+                    parts = raw.split(" | ", 1)
+                    item["title"] = parts[0].strip()
+                    item["name"] = parts[0].strip()
+                    if "tech" in parts[1].lower() or ":" in parts[1]:
+                        item["tech"] = parts[1].strip()
+                    else:
+                        item["tech"] = parts[1].strip()
+                current_item = item
+                result["projects"].append(current_item)
+            elif stripped.startswith("- ") or stripped.startswith("* "):
+                bullet = stripped[2:].strip().replace("**", "").replace("__", "")
+                if current_item:
+                    current_item["bullets"].append(bullet)
+                else:
+                    current_item = {"title": "", "name": "", "bullets": [bullet]}
+                    result["projects"].append(current_item)
+            else:
+                clean = stripped.replace("**", "").replace("__", "")
+                if current_item:
+                    current_item["bullets"].append(clean)
+                else:
+                    current_item = {"title": clean, "name": clean, "bullets": []}
+                    result["projects"].append(current_item)
 
     # Flatten summary
     result["summary"] = " ".join(result["summary"]) if result["summary"] else ""
@@ -1509,6 +1661,9 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
     name = ascii_safe(resume_data.get("name", "Resume"))
     email = ascii_safe(resume_data.get("email", ""))
     phone = ascii_safe(resume_data.get("phone", ""))
+    linkedin = ascii_safe(resume_data.get("linkedin", ""))
+    github_acc = ascii_safe(resume_data.get("github", ""))
+    loc = ascii_safe(resume_data.get("location", ""))
     summary = ascii_safe(resume_data.get("summary", ""))
     education = resume_data.get("education", [])
     experience = resume_data.get("experience", [])
@@ -1525,30 +1680,30 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
 
     def section_header(title):
         pdf.set_font("Helvetica", "B", 11)
-        pdf.set_text_color(44, 62, 80)
+        pdf.set_text_color(26, 82, 118)
         pdf.cell(content_w, 7, ascii_safe(title.upper()), new_x="LMARGIN", new_y="NEXT")
-        pdf.set_draw_color(189, 195, 199)
-        pdf.set_line_width(0.3)
+        pdf.set_draw_color(41, 128, 185)
+        pdf.set_line_width(0.4)
         pdf.line(ml, pdf.get_y(), ml + content_w, pdf.get_y())
         pdf.ln(3)
-        pdf.set_text_color(51, 51, 51)
+        pdf.set_text_color(45, 45, 45)
 
     # Header
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.set_xy(ml, 20)
+    pdf.set_font("Helvetica", "B", 22)
+    pdf.set_xy(ml, 18)
     pdf.cell(content_w, 10, name, align="C", new_x="LMARGIN", new_y="NEXT")
 
-    contact_parts = [p for p in [email, phone] if p]
+    contact_parts = [p for p in [loc, email, phone, linkedin, github_acc] if p]
     if contact_parts:
-        pdf.set_font("Helvetica", "", 9)
+        pdf.set_font("Helvetica", "", 8.5)
         pdf.set_xy(ml, pdf.get_y() + 2)
         pdf.cell(content_w, 5, "  |  ".join(contact_parts), align="C", new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(3)
-    pdf.set_draw_color(44, 62, 80)
+    pdf.set_draw_color(26, 82, 118)
     pdf.set_line_width(0.5)
     pdf.line(ml, pdf.get_y(), ml + content_w, pdf.get_y())
-    pdf.ln(6)
+    pdf.ln(5)
 
     # Summary
     if summary:
@@ -1566,6 +1721,7 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
                 text = ascii_safe(item.get("degree") or item.get("name") or item.get("text", ""))
                 school = ascii_safe(item.get("school", ""))
                 year = ascii_safe(item.get("year", ""))
+                gpa = ascii_safe(item.get("gpa", ""))
                 if text:
                     pdf.set_font("Helvetica", "B", 10)
                     pdf.set_x(ml)
@@ -1579,6 +1735,12 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
                     pdf.set_font("Helvetica", "I", 9)
                     pdf.set_x(ml)
                     pdf.cell(content_w, 4, school, new_x="LMARGIN", new_y="NEXT")
+                if gpa:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(85, 85, 85)
+                    pdf.set_x(ml)
+                    pdf.cell(content_w, 4, f"GPA: {gpa}", new_x="LMARGIN", new_y="NEXT")
+                    pdf.set_text_color(45, 45, 45)
             else:
                 pdf.set_font("Helvetica", "B", 10)
                 pdf.set_x(ml)
@@ -1591,28 +1753,27 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
         section_header("Experience")
         for item in experience:
             if isinstance(item, dict):
-                title = ascii_safe(item.get("role") or item.get("title", ""))
+                role = ascii_safe(item.get("role") or item.get("title", ""))
                 company = ascii_safe(item.get("company", ""))
                 dates = ascii_safe(item.get("dates", ""))
-                if title:
+                exp_loc = ascii_safe(item.get("location", ""))
+                if role:
                     pdf.set_font("Helvetica", "B", 10)
                     pdf.set_x(ml)
-                    if dates:
-                        pdf.cell(content_w - 35, 5, title, new_x="LEFT", new_y="TOP")
-                        pdf.set_font("Helvetica", "I", 9)
-                        pdf.cell(35, 5, dates, align="R", new_x="LMARGIN", new_y="NEXT")
-                    else:
-                        pdf.cell(content_w, 5, title, new_x="LMARGIN", new_y="NEXT")
+                    pdf.cell(content_w - 40, 5, role, new_x="LEFT", new_y="TOP")
+                    pdf.set_font("Helvetica", "I", 9)
+                    pdf.cell(40, 5, dates, align="R", new_x="LMARGIN", new_y="NEXT")
                 if company:
+                    subtitle = company + (f" -- {exp_loc}" if exp_loc else "")
                     pdf.set_font("Helvetica", "I", 9)
                     pdf.set_x(ml)
-                    pdf.cell(content_w, 4, company, new_x="LMARGIN", new_y="NEXT")
+                    pdf.cell(content_w, 4, subtitle, new_x="LMARGIN", new_y="NEXT")
                 for bullet in item.get("bullets", []):
                     clean = ascii_safe(re.sub(r'^[\u2022\-*\s]+', '', str(bullet)).strip())
                     if clean:
-                        pdf.set_font("Helvetica", "", 9)
+                        pdf.set_font("Helvetica", "", 9.5)
                         pdf.set_x(ml + 3)
-                        pdf.multi_cell(content_w - 6, 4.5, f"- {clean}", new_x="LMARGIN", new_y="NEXT")
+                        pdf.multi_cell(content_w - 5, 4.5, f"\u2022 {clean}", new_x="LMARGIN", new_y="NEXT")
             else:
                 pdf.set_font("Helvetica", "", 9)
                 pdf.set_x(ml)
@@ -1625,8 +1786,26 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
         section_header("Skills")
         pdf.set_font("Helvetica", "", 9)
         pdf.set_x(ml)
-        skills_text = "  |  ".join(ascii_safe(s) for s in skills)
-        pdf.multi_cell(content_w, 5, skills_text, new_x="LMARGIN", new_y="NEXT")
+        # Check if skills contain categories (colon-separated like "Languages: Python, Java")
+        has_categories = any(":" in s for s in skills)
+        if has_categories:
+            for skill_line in skills:
+                clean = ascii_safe(skill_line)
+                if ":" in clean:
+                    cat, vals = clean.split(":", 1)
+                    pdf.set_font("Helvetica", "B", 9)
+                    pdf.set_x(ml)
+                    pdf.cell(content_w, 5, cat.strip() + ":  ", new_x="RIGHT", new_y="TOP")
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.multi_cell(content_w - pdf.get_x() + ml, 5, vals.strip(), new_x="LMARGIN", new_y="NEXT")
+                else:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_x(ml)
+                    pdf.cell(content_w, 5, clean, new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(0.5)
+        else:
+            skills_text = "  |  ".join(ascii_safe(s) for s in skills)
+            pdf.multi_cell(content_w, 5, skills_text, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
 
     # Projects
@@ -1634,17 +1813,29 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
         section_header("Projects")
         for item in projects:
             if isinstance(item, dict):
-                title = ascii_safe(item.get("title") or item.get("name", ""))
-                if title:
+                proj_title = ascii_safe(item.get("title") or item.get("name", ""))
+                tech = ascii_safe(item.get("tech", ""))
+                proj_link = ascii_safe(item.get("link", ""))
+                if proj_title:
                     pdf.set_font("Helvetica", "B", 10)
                     pdf.set_x(ml)
-                    pdf.cell(content_w, 5, title, new_x="LMARGIN", new_y="NEXT")
+                    pdf.cell(content_w, 5, proj_title, new_x="LMARGIN", new_y="NEXT")
+                if tech:
+                    pdf.set_font("Helvetica", "I", 8.5)
+                    pdf.set_text_color(41, 128, 185)
+                    pdf.set_x(ml)
+                    pdf.cell(content_w, 4, tech, new_x="LMARGIN", new_y="NEXT")
+                    pdf.set_text_color(45, 45, 45)
+                if proj_link:
+                    pdf.set_font("Helvetica", "", 8)
+                    pdf.set_x(ml)
+                    pdf.cell(content_w, 4, proj_link, new_x="LMARGIN", new_y="NEXT")
                 for bullet in item.get("bullets", []):
                     clean = ascii_safe(re.sub(r'^[\u2022\-*\s]+', '', str(bullet)).strip())
                     if clean:
-                        pdf.set_font("Helvetica", "", 9)
+                        pdf.set_font("Helvetica", "", 9.5)
                         pdf.set_x(ml + 3)
-                        pdf.multi_cell(content_w - 6, 4.5, f"- {clean}", new_x="LMARGIN", new_y="NEXT")
+                        pdf.multi_cell(content_w - 5, 4.5, f"\u2022 {clean}", new_x="LMARGIN", new_y="NEXT")
                 desc = ascii_safe(item.get("description", ""))
                 if desc and not item.get("bullets"):
                     pdf.set_font("Helvetica", "", 9)

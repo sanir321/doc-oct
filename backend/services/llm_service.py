@@ -581,9 +581,9 @@ Use these ##-prefixed sections in order:
 Rules:
 - Start with ## Summary (2-3 sentence professional summary based on the document).
 - For ## Education, list each entry as: **Degree** — School, Year with GPA if available.
-- For ## Experience, use ### sub-headings: ### Role — Company, Dates then bullet points for achievements.
-- For ## Skills, group by category (Languages, Frameworks, Tools, etc.) as bullet points.
-- For ## Projects, use bold names with brief descriptions.
+- For ## Experience, use ### sub-headings: ### Role | Company | Location | Dates then bullet points for achievements. Always use the | separator format.
+- For ## Skills, group by category (Languages, Frameworks, Tools, etc.) as bullet points. Eg: "- Languages: Python, Java, C++"
+- For ## Projects, use bold names with brief descriptions. Use format **Project Name** | Tech: ... then bullet points.
 - For ## Certifications, simple bullet list.
 - Only include sections that have content. Skip empty sections.
 - Never invent specific numbers, metrics, or achievements not mentioned in the source document.
