@@ -1799,25 +1799,12 @@ def generate_resume_pdf(resume_data: dict) -> bytes:
         pdf.set_font("Helvetica", "", 9)
         pdf.set_x(ml)
         # Check if skills contain categories (colon-separated like "Languages: Python, Java")
-        has_categories = any(":" in s for s in skills)
-        if has_categories:
-            for skill_line in skills:
-                clean = ascii_safe(skill_line)
-                if ":" in clean:
-                    cat, vals = clean.split(":", 1)
-                    pdf.set_font("Helvetica", "B", 9)
-                    pdf.set_x(ml)
-                    pdf.cell(content_w, 5, cat.strip() + ":  ", new_x="RIGHT", new_y="TOP")
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.multi_cell(content_w - pdf.get_x() + ml, 5, vals.strip(), new_x="LMARGIN", new_y="NEXT")
-                else:
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.set_x(ml)
-                    pdf.cell(content_w, 5, clean, new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(0.5)
-        else:
-            skills_text = "  |  ".join(ascii_safe(s) for s in skills)
-            pdf.multi_cell(content_w, 5, skills_text, new_x="LMARGIN", new_y="NEXT")
+        for skill_line in skills:
+            clean = ascii_safe(skill_line)
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_x(ml)
+            pdf.multi_cell(content_w, 5, clean, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(0.5)
         pdf.ln(2)
 
     # Projects
